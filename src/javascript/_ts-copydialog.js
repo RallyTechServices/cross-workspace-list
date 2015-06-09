@@ -223,6 +223,7 @@ Ext.define('Rally.technicalservices.dialog.CopyDialog', {
                 change: function(picker,record,options) {
                     this.target_project = picker.getSelectedRecord().getData();
                     this.target_workspace = this.target_project.Workspace;
+                //    this.validateCustomFieldExistance(this.target_workspace, this.target_project)
 
                     this._enableDoneButton();
                 },
@@ -369,7 +370,6 @@ Ext.define('Rally.technicalservices.dialog.CopyDialog', {
         }
 
         storeConfig.filters = (storeConfig.filters || []).concat(this.getStoreFilters());
-
         return storeConfig;
     },
 

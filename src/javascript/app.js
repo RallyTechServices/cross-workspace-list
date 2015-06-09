@@ -9,6 +9,14 @@ Ext.define("TSCrossWorkspaceTracker", {
         {xtype:'container',itemId:'display_box'},
         {xtype:'tsinfolink'}
     ],
+    config: {
+        defaultSettings: {
+            fieldsToCopy: ['Name','Description','PlanEstimate','ScheduleState'],
+            fieldsToUpdate: ['Name','Description','PlanEstimate','ScheduleState'],
+            gridFields: ['FormattedID','Name','ScheduleState','PlanEstimate'],
+            link_field: undefined
+        }
+    },
     launch: function() {
         if (!this.getSettings().link_field) {
             this.down('#display_box').add({
@@ -22,8 +30,6 @@ Ext.define("TSCrossWorkspaceTracker", {
                 this.onSettingsUpdate(this.getSettings());
             }
         }
-        this._addSelectors(this.down('#selector_box'));
-
     },
     _addSelectors: function(container) {
         container.add({
@@ -36,6 +42,45 @@ Ext.define("TSCrossWorkspaceTracker", {
                 click: this._launchCopyDialog
             }
         });
+
+        container.add({
+            xtype: 'rallybutton',
+            text: 'Update',
+            itemId: 'btn-update',
+            listeners: {
+                scope: this,
+                click: this._update
+            }
+        });
+    },
+    _update: function(){
+
+        var records_to_update= this.down('#link-grid').getStore().getRecords();  //Todo handle paging
+
+        var updater = Ext.create('Rally.technicalservices.artifactCopier',{
+            fieldsToCopy: this.fieldsToUpdate,
+            linkField: this.getSetting('link_field'),
+            context: this.getContext(),
+            listeners: {
+                scope: this,
+                artifactupdated: function(originalArtifact){
+                    this.logger.log('artifactupdated', originalArtifact);
+                    Rally.ui.notify.Notifier.showUpdate({artifact: originalArtifact});
+                    this.down('#link-grid').getStore().reload();
+                },
+                updateerror: function(msg){
+                    this.logger.log('updateerror',msg);
+                    Rally.ui.notify.Notifier.showError({message: msg});
+                },
+                updatewarning: function(msg){
+                    this.logger.log('updatewarning',msg);
+                    Rally.ui.notify.Notifier.showWarning({message: msg});
+                }
+            }
+        });
+        _.each(records_to_update, function(r){
+            updater.updateFromLinkedArtifact(r);
+        });
     },
     _gatherData: function(settings) {
         var me = this;
@@ -44,54 +89,79 @@ Ext.define("TSCrossWorkspaceTracker", {
         this.logger.log("Settings are:", settings);
         
         var model_name = 'UserStory';
-        var field_names = ['FormattedID','Name','ScheduleState', settings.link_field];
-        var filters = [{property:settings.link_field, operator:'contains', value:'a href'}];
+        var field_names = _.uniq(['FormattedID'].concat(this.fieldsToCopy).concat([this.link_field]).concat(this.fieldsToUpdate));
+        this.logger.log('_gatherData',field_names, settings.link_field);
 
-        this.setLoading("Loading stories...");
-        
-        this._loadAStoreWithAPromise(model_name, field_names, filters).then({
-            scope: this,
-            success: function(store) {
-                this._displayGrid(store,field_names);
-            },
-            failure: function(error_message){
-                alert(error_message);
-            }
-        }).always(function() {
-            me.setLoading(false);
-        });
-    },
-    _loadAStoreWithAPromise: function(model_name, model_fields,filters){
-        var deferred = Ext.create('Deft.Deferred');
-        var me = this;
-        this.logger.log("Starting load:",model_name,model_fields);
-          
-        Ext.create('Rally.data.wsapi.Store', {
+        var filters = [{property:settings.link_field, operator:'contains', value: 'href' }];
+
+        Ext.create('Rally.data.wsapi.Store',{
             model: model_name,
-            fetch: model_fields,
-            filters: filters
-        }).load({
-            callback : function(records, operation, successful) {
-                if (successful){
-                    deferred.resolve(this);
-                } else {
-                    me.logger.log("Failed: ", operation);
-                    deferred.reject('Problem finding User Stories: ' + operation.error.errors.join('. '));
+            fetch: field_names,
+            filters: filters,
+            autoLoad: true,
+            listeners: {
+                scope: this,
+                load: function(store, records, success){
+                    this.logger.log('store',store, records);
+                    var fields = this.gridFields.concat(this.link_field);
+                    this._displayGrid(store,fields,this.link_field);
                 }
             }
         });
-        return deferred.promise;
     },
-    _displayGrid: function(store,field_names){
+
+    _displayGrid: function(store,field_names, link_field){
+
+        if (this.down('#link-grid')){
+            this.down('#link-grid').destroy();
+        }
+
+        var field_names = ['FormattedID','Name','ScheduleState'].concat(link_field);
+
+        var columnCfgs = [];
+
+        _.each(field_names, function(f){
+            if (f == link_field){
+                columnCfgs.push({
+                    dataIndex: f,
+                    text: f,
+                    renderer: this._linkRenderer
+                });
+            } else {
+                columnCfgs.push({dataIndex: f, text: f});
+            }
+        }, this);
+
         this.down('#display_box').add({
             xtype: 'rallygrid',
+            itemId: 'link-grid',
             store: store,
-            columnCfgs: field_names
+            columnCfgs: columnCfgs,
+            showRowActionsColumn: false,
+
         });
     },
+    _linkRenderer: function(v,m,r){
+        return v;
+        return Ext.String.format('<a href="https://demo-west.rallydev.com/#/detail{0}" target="_blank">Linked Story</a>', v);
+    },
     _launchCopyDialog: function() {
+
+        var filters = [{property:this.link_field, value: null }];
+        var fetch = [this.link_field].concat(this.fieldsToCopy);
+        this.logger.log('_launchCopyDialog',  this.fieldsToCopy, fetch);
+
         Ext.create('Rally.technicalservices.dialog.CopyDialog', {
             artifactTypes: ['userstory'],
+            storeConfig: {
+                fetch: fetch,
+                filters: filters,
+                context: {
+                    workspace: this.getContext().getWorkspace()._ref,
+                    project: this.getContext().getProject()._ref,
+                    projectScopeDown: this.getContext().getProjectScopeDown()
+                }
+            },
             autoShow: true,
             height: 400,
             title: 'Copy',
@@ -103,11 +173,39 @@ Ext.define("TSCrossWorkspaceTracker", {
                     // selectedRecords is a model.  (In an array if multiple was true)
                     // targetproject, targetworkspace are hashes (do not respond to .get('x'), but to .x
                     this.logger.log('selected:',selection);
+
+                    var copier = Ext.create('Rally.technicalservices.artifactCopier',{
+                        fieldsToCopy: this.fieldsToCopy,
+                        linkField: this.getSetting('link_field'),
+                        context: this.getContext(),
+                        listeners: {
+                            scope: this,
+                            artifactcreated: function(newArtifact){
+                               console.log('artifactcreated',newArtifact);
+//                                this.down('#link-grid').getStore().reload();
+                                Rally.ui.notify.Notifier.showCreate({artifact: newArtifact});
+                            },
+                            copyerror: function(error_msg){
+                                Rally.ui.notify.Notifier.showError({message: error_msg});
+                            },
+                            artifactupdated: function(originalArtifact){
+                                this.logger.log('artifactupdated', originalArtifact);
+                                Rally.ui.notify.Notifier.showUpdate({artifact: originalArtifact});
+                                this.down('#link-grid').getStore().reload();
+                            },
+                            updateerror: function(msg){
+                                this.logger.log('updateerror',msg);
+                                Rally.ui.notify.Notifier.showError({message: msg});
+                            }
+                        }
+                    });
+                    copier.copy(selection.targetWorkspace, selection.targetProject, selection.selectedRecords);
                 },
                 scope: this
             }
          });
     },
+
     /********************************************
      /* Overrides for App class
      /*
@@ -181,6 +279,9 @@ Ext.define("TSCrossWorkspaceTracker", {
     onSettingsUpdate: function (settings){
         this.logger.log('onSettingsUpdate',settings);
         Ext.apply(this, settings);
+
+        this._addSelectors(this.down('#selector_box'));
+
         this.down('#create_button').setDisabled(false);
         
         this._gatherData(settings);

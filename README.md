@@ -1,5 +1,8 @@
 #Cross-Workspace Tracker
 
+
+If the selected link ID field is already populated, the story will not be available in the list of stories to copy.
+
 ## Development Notes
 
 ### First Load
