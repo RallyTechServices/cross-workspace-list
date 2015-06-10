@@ -206,32 +206,37 @@ Ext.define('Rally.technicalservices.dialog.CopyDialog', {
 
         var top_items = [];
                 
-        if (this.introText) {
-            top_items.push({
-                xtype: 'component',
-                componentCls: 'intro-panel',
-                padding: 5,
-                html: this.introText
-            });
-        }
+        //if (this.introText) {
+        //    top_items.push({
+        //        xtype: 'component',
+        //        componentCls: 'intro-panel',
+        //        padding: 5,
+        //        html: this.introText
+        //    });
+        //}
         
         var picker = Ext.create('Rally.ui.picker.project.ProjectPicker',{
             itemId: 'project_picker',
-            fieldLabel:'Target',
-            showMostRecentlyUsedProjects: false,
+            fieldLabel:this.introText,
+            labelAlign: 'top',
+            width: '100%',
+            dock: 'top',
+            border: false,
+            padding: '0 0 10px 0',
+            showMostRecentlyUsedProjects: true,
             listeners: {
                 change: function(picker,record,options) {
                     this.target_project = picker.getSelectedRecord().getData();
                     this.target_workspace = this.target_project.Workspace;
-                //    this.validateCustomFieldExistance(this.target_workspace, this.target_project)
 
                     this._enableDoneButton();
                 },
                 scope: this
             }
         });
-        
-        top_items.push(picker);
+
+        this.addDocked(picker);
+       // top_items.push(picker);
         
         this.addDocked({
             xtype:'container',

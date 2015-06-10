@@ -83,7 +83,6 @@ Ext.define("TSCrossWorkspaceTracker", {
         });
     },
     _gatherData: function(settings) {
-        var me = this;
         this.down('#display_box').removeAll();
         
         this.logger.log("Settings are:", settings);
@@ -124,8 +123,7 @@ Ext.define("TSCrossWorkspaceTracker", {
             if (f == link_field){
                 columnCfgs.push({
                     dataIndex: f,
-                    text: f,
-                    renderer: this._linkRenderer
+                    text: f
                 });
             } else {
                 columnCfgs.push({dataIndex: f, text: f});
@@ -137,13 +135,8 @@ Ext.define("TSCrossWorkspaceTracker", {
             itemId: 'link-grid',
             store: store,
             columnCfgs: columnCfgs,
-            showRowActionsColumn: false,
-
+            showRowActionsColumn: false
         });
-    },
-    _linkRenderer: function(v,m,r){
-        return v;
-        return Ext.String.format('<a href="https://demo-west.rallydev.com/#/detail{0}" target="_blank">Linked Story</a>', v);
     },
     _launchCopyDialog: function() {
 

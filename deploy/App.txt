@@ -3,11 +3,11 @@
 <head>
     <title>Cross-Workspace Tracker</title>
     <!--  (c) 2015 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Tue Jun 09 2015 17:21:51 GMT-0600 (MDT) -->
+    <!--  Build Date: Wed Jun 10 2015 13:35:32 GMT-0600 (MDT) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Tue Jun 09 2015 17:21:51 GMT-0600 (MDT)";
-        var CHECKSUM = 31618671396;
+        var APP_BUILD_DATE = "Wed Jun 10 2015 13:35:32 GMT-0600 (MDT)";
+        var CHECKSUM = 36355196400;
     </script>
     
     <script type="text/javascript" src="/apps/2.0/sdk.js"></script>
@@ -579,32 +579,37 @@ Ext.define('Rally.technicalservices.dialog.CopyDialog', {
 
         var top_items = [];
                 
-        if (this.introText) {
-            top_items.push({
-                xtype: 'component',
-                componentCls: 'intro-panel',
-                padding: 5,
-                html: this.introText
-            });
-        }
+        //if (this.introText) {
+        //    top_items.push({
+        //        xtype: 'component',
+        //        componentCls: 'intro-panel',
+        //        padding: 5,
+        //        html: this.introText
+        //    });
+        //}
         
         var picker = Ext.create('Rally.ui.picker.project.ProjectPicker',{
             itemId: 'project_picker',
-            fieldLabel:'Target',
-            showMostRecentlyUsedProjects: false,
+            fieldLabel:this.introText,
+            labelAlign: 'top',
+            width: '100%',
+            dock: 'top',
+            border: false,
+            padding: '0 0 10px 0',
+            showMostRecentlyUsedProjects: true,
             listeners: {
                 change: function(picker,record,options) {
                     this.target_project = picker.getSelectedRecord().getData();
                     this.target_workspace = this.target_project.Workspace;
-                //    this.validateCustomFieldExistance(this.target_workspace, this.target_project)
 
                     this._enableDoneButton();
                 },
                 scope: this
             }
         });
-        
-        top_items.push(picker);
+
+        this.addDocked(picker);
+       // top_items.push(picker);
         
         this.addDocked({
             xtype:'container',
@@ -860,6 +865,136 @@ Ext.define('Rally.technicalservices.MessageBuilder',{
     },
 
 });
+Ext.define('Rally.ui.tree.ProjectTree', {
+    extend: 'Rally.ui.tree.Tree',
+    alias: 'widget.rallyprojecttree',
+
+    requires: [
+        'Rally.ui.tree.PlainTreeItem'
+    ],
+
+    config: {
+        topLevelModel: Ext.identityFn('Workspace'),
+
+        topLevelStoreConfig: {
+            fetch: ['Name', 'State', 'Workspace'],
+            filters: [{
+                property: 'State',
+                value: 'Open'
+            }, {
+                property: 'Projects.State',
+                value: 'Open'
+            }],
+            sorters: [{
+                property: 'Name',
+                direction: 'ASC'
+            }],
+            context: {
+                workspace: 'null',
+                project: undefined
+            }
+        },
+
+        /**
+         * @cfg {String}
+         * If workspace _ref is supplied, we overwrite topLevelModel and topLevelStoreConfig
+         * so that we only show projects under that workspace. We also do not show the top level workspace.
+         */
+        workspace: undefined,
+
+        treeItemConfigForRecordFn: function(record){
+            if(record.get('_type') === 'workspace'){
+                return {
+                    xtype: 'rallyplaintreeitem'
+                };
+            } else {
+                return {
+                    xtype: 'rallyplaintreeitem',
+                    selectable: true
+                };
+            }
+        },
+
+        childModelTypeForRecordFn: function(){
+            return 'Project';
+        },
+
+        givenAParentRecordWhatIsTheAttributeConnectingAChildToThisParentFn: function(record){
+            return 'Parent';
+        },
+
+        childItemsStoreConfigForParentRecordFn: function(record){
+
+            var storeConfig = {
+                fetch: ['Name', 'Children:summary[State]', 'State', 'Workspace'],
+                sorters: [{
+                    property: 'Name',
+                    direction: 'ASC'
+                }]
+            };
+
+            if(record.get('_type') === 'workspace'){
+                return Ext.apply(storeConfig, {
+                    filters: [{
+                        property: 'Parent',
+                        value: 'null'
+                    }],
+                    context: {
+                        workspace: record.get('_ref'),
+                        project: null
+                    }
+                });
+            } else {
+                return Ext.apply(storeConfig, {
+                    filters: [{
+                        property: 'Parent',
+                        value: record.get('_ref')
+                    }],
+                    context: {
+                        workspace: record.get('Workspace')._ref,
+                        project: null
+                    }
+                });
+            }
+        },
+
+        canExpandFn: function(record){
+            if(record.get('_type') === 'workspace'){
+                //query filters out Workspaces with closed projects, so any workspace can be expanded
+                return true;
+            }
+            return record.get('Summary').Children.State.Open;
+        }
+    },
+
+    constructor: function(config) {
+        if (config.workspace) {
+            config.topLevelModel = 'Project';
+            config.topLevelStoreConfig = {
+                fetch: ['Name', 'State', 'Children:summary[State]'],
+                filters: [{
+                    property: 'State',
+                    value: 'Open'
+                }, {
+                    property: 'Parent',
+                    value: 'null'
+                }],
+                sorters: [{
+                    property: 'Name',
+                    direction: 'ASC'
+                }],
+                context: {
+                    workspace: config.workspace,
+                    project: undefined
+                }
+            };
+        }
+
+        this.callParent(arguments);
+    }
+});
+
+
 Ext.define("TSCrossWorkspaceTracker", {
     extend: 'Rally.app.App',
     componentCls: 'app',
@@ -945,7 +1080,6 @@ Ext.define("TSCrossWorkspaceTracker", {
         });
     },
     _gatherData: function(settings) {
-        var me = this;
         this.down('#display_box').removeAll();
         
         this.logger.log("Settings are:", settings);
@@ -986,8 +1120,7 @@ Ext.define("TSCrossWorkspaceTracker", {
             if (f == link_field){
                 columnCfgs.push({
                     dataIndex: f,
-                    text: f,
-                    renderer: this._linkRenderer
+                    text: f
                 });
             } else {
                 columnCfgs.push({dataIndex: f, text: f});
@@ -999,13 +1132,8 @@ Ext.define("TSCrossWorkspaceTracker", {
             itemId: 'link-grid',
             store: store,
             columnCfgs: columnCfgs,
-            showRowActionsColumn: false,
-
+            showRowActionsColumn: false
         });
-    },
-    _linkRenderer: function(v,m,r){
-        return v;
-        return Ext.String.format('<a href="https://demo-west.rallydev.com/#/detail{0}" target="_blank">Linked Story</a>', v);
     },
     _launchCopyDialog: function() {
 
