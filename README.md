@@ -1,5 +1,15 @@
 #Cross-Workspace Tracker
 
+Allows users to make a copy of a story in a different workspace and project.
+A link will be created between the source and destination stories (in the selected link field).
+Fields that are copied are Name, Description, PlanEstimate and Schedule state.
+
+The grid of the app lists all stories that have been linked to external stories in the current project scope.
+Clicking Update, will update the Name, Description, PlanEstimate and ScheduleState fields.
+
+If the selected link ID field is already populated, the story will not be available in the list of stories to copy.
+
+
 ## Development Notes
 
 ### First Load
