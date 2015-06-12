@@ -3,11 +3,11 @@
 <head>
     <title>Cross-Workspace Tracker</title>
     <!--  (c) 2015 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Wed Jun 10 2015 13:35:32 GMT-0600 (MDT) -->
+    <!--  Build Date: Fri Jun 12 2015 14:39:18 GMT-0600 (MDT) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Wed Jun 10 2015 13:35:32 GMT-0600 (MDT)";
-        var CHECKSUM = 36355196400;
+        var APP_BUILD_DATE = "Fri Jun 12 2015 14:39:18 GMT-0600 (MDT)";
+        var CHECKSUM = 36357441034;
     </script>
     
     <script type="text/javascript" src="/apps/2.0/sdk.js"></script>
@@ -184,7 +184,7 @@ Ext.define('Rally.technicalservices.artifactCopier',{
     updateFromLinkedArtifact: function(artifact_to_be_updated){
 
         var link = artifact_to_be_updated.get(this.linkField),
-            matches = /<a.*href="\/#\/(\d+)d\/detail\/userstory\/(\d+)">(.*)<\/a>/.exec(link),
+            matches = /<a.*href="\/#\/(\d+).*\/detail\/userstory\/(\d+)">(.*)<\/a>/.exec(link),
             objectID = null,
             projectOid = null,
             store_context = null,
