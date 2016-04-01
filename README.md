@@ -18,16 +18,15 @@ The selected Link ID field must be present in the source workspace and the desti
 The user must have editor permissions to both the source and destination workspaces.  
 
 Steps to get started:
-(1) Using the App Settings, select a Link Field.  This should be a string field that is not being used for anything else and it should exist in both the source and destination workspaces.
-(2) You will see an empty grid.  This grid shows the list of stories that have been copied to other workspaces.  
-(3) Click Create in Other Worksapce to select a story to create in another workspace 
-(4) You will only be able to copy stories that do not have a Link ID populated.  Select a story and click "Done".
-(5) The story will be copied to the selected workspace and project.  
-(6) Go to the story in the destination workspace and update the Name and Schedule State
-(7) Return to the App and click "Update".  The name and schedule state of the story in the current workspace will be updated so that it is synced with the destination story.  
+1. Using the App Settings, select a Link Field.  This should be a string field that is not being used for anything else and it should exist in both the source and destination workspaces.
+2. You will see an empty grid.  This grid shows the list of stories that have been copied to other workspaces.  
+3. Click Create in Other Worksapce to select a story to create in another workspace 
+4. You will only be able to copy stories that do not have a Link ID populated.  Select a story and click "Done".
+5. The story will be copied to the selected workspace and project.  
+6. Go to the story in the destination workspace and update the Name and Schedule State
+7. Return to the App and click "Update".  The name and schedule state of the story in the current workspace will be updated so that it is synced with the destination story.  
 
- 
-  
+
 
 
 ## Development Notes
