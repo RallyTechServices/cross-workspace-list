@@ -138,6 +138,35 @@ _utf8_decode : function (utftext) {
     }
 
     return string;
-}
+    },
 
+    getRallyModel: function(type){
+        var deferred = Ext.create('Deft.Deferred');
+
+        Rally.data.ModelFactory.getModel({
+            type: type,
+            success: function(model){
+                deferred.resolve(model);
+            },
+            failure: function(){
+                deferred.reject('Failed to create model');
+            }
+        });
+        return deferred;
+    },
+   createRallyObject: function(model, fields){
+       var deferred = Ext.create('Deft.Deferred');
+
+       var rec = Ext.create(model, fields);
+       rec.save({
+           callback: function(result, operation){
+               if (operation.wasSuccessful()){
+                   deferred.resolve(rec);
+               } else {
+                   deferred.reject(operation);
+               }
+           }
+       });
+       return deferred;
+   }
 }

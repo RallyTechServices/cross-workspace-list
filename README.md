@@ -1,28 +1,26 @@
-#Cross-Workspace Tracker
+#Cross Workspace List
 
-Allows users to make a copy of a story in a different workspace and project.
-A link will be created between the source and destination stories (in the selected link field).
-Fields that are copied are Name, Description, PlanEstimate and Schedule state.
+###Requirements for app to run:
+* Link Field needs to be the same name for all types in the workspace.
 
-![ScreenShot](images/cross-workspace-tracker.png)
+### List of fields that will be synced and copied with this app: 
 
-The grid of the app lists all stories that have been linked to external stories in the current project scope.
-Clicking Update, will update the Name, Description, PlanEstimate and ScheduleState fields.
-
-If the selected link ID field is already populated, the story will not be available in the list of stories to copy.
-
-The selected Link ID field must be present in the source workspace and the destination workspace.  
-
-The user must have editor permissions to both the source and destination workspaces.  
-
-####Steps to get started:
- 1. Using the App Settings, select a Link Field.  This should be a string field that is not being used for anything else and it should exist in both the source and destination workspaces.
- 2. You will see an empty grid.  This grid shows the list of stories that have been copied to other workspaces.
- 3. Click Create in Other Worksapce to select a story to create in another workspace 
- 4. You will only be able to copy stories that do not have a Link ID populated.  Select a story and click "Done".
- 5. The story will be copied to the selected workspace and project.  
- 6. Go to the story in the destination workspace and update the Name and Schedule State
- 7. Return to the App and click "Update".  The name and schedule state of the story in the current workspace will be updated so that it is synced with the destination story.  
+####Portfolio Items
+* Name
+* State (Mapping required via App Settings for each configured workspace)
+* Description 
+* PlannedStartDate
+* PlannedEndDate
+ 
+####User Stories
+* Name
+* Description
+* ScheduleState
+ 
+####Tasks
+* Name
+* Description
+* State
 
 ## Development Notes
 
@@ -59,14 +57,15 @@ to get set up to develop:
   and debug html files live.  The advantage of using these templates is that
   you can configure the behavior of the html around the JS.
   * config.json: This file contains the configuration settings necessary to
-  create the debug and production html files.  Server is only used for debug,
-  name, className and sdk are used for both.
+  create the debug and production html files.  
   * package.json: This file lists the dependencies for grunt
-  * auth.json: This file should NOT be checked in.  Create this to run the
-  slow test specs.  It should look like:
+  * auth.json: This file should NOT be checked in.  Create this to create a
+  debug version of the app, to run the slow test specs and/or to use grunt to
+  install the app in your test environment.  It should look like:
     {
         "username":"you@company.com",
-        "password":"secret"
+        "password":"secret",
+        "server": "https://rally1.rallydev.com"
     }
   
 ### Usage of the grunt file
@@ -91,3 +90,34 @@ directory are more pure unit tests and do not need to connect to Rally.
 Use grunt test-slow to run the Jasmine tests in the slow directory.  Typically, the tests in the slow
 directory are more like integration tests in that they require connecting to Rally and interacting with
 data.
+
+##### grunt deploy
+
+Use grunt deploy to build the deploy file and then install it into a new page/app in Rally.  It will create the page on the Home tab and then add a custom html app to the page.  The page will be named using the "name" key in the config.json file (with an asterisk prepended).
+
+To use this task, you must create an auth.json file that contains the following keys:
+{
+    "username": "fred@fred.com",
+    "password": "fredfredfred",
+    "server": "https://us1.rallydev.com"
+}
+
+(Use your username and password, of course.)  NOTE: not sure why yet, but this task does not work against the demo environments.  Also, .gitignore is configured so that this file does not get committed.  Do not commit this file with a password in it!
+
+When the first install is complete, the script will add the ObjectIDs of the page and panel to the auth.json file, so that it looks like this:
+
+{
+    "username": "fred@fred.com",
+    "password": "fredfredfred",
+    "server": "https://us1.rallydev.com",
+    "pageOid": "52339218186",
+    "panelOid": 52339218188
+}
+
+On subsequent installs, the script will write to this same page/app. Remove the
+pageOid and panelOid lines to install in a new place.  CAUTION:  Currently, error checking is not enabled, so it will fail silently.
+
+##### grunt watch
+
+Run this to watch files (js and css).  When a file is saved, the task will automatically build and deploy as shown in the deploy section above.
+
