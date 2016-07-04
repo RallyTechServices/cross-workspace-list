@@ -33,20 +33,7 @@ Ext.define("cross-workspace-list", {
 
     launch: function() {
 
-        this._validateAppSettings()
-    },
-    _validateAppSettings: function(){
-        this.down('#display_box').removeAll();
-
-        this.logger.log('_validateApp', this.getSetting('workspaceSettings'), this.getSetting('link_field'));
-        if (Ext.isEmpty(this.getSetting('workspaceSettings')) || this.getSetting('link_field') == "") {
-            this.down('#display_box').add({
-                xtype: 'container',
-                html: 'Use the "App Settings..." menu choice to configure this app'
-            });
-            return;
-        }
-        this._initializeWorkspaceSettings();
+        this._initializeWorkspaceSettings()
     },
     /**
      * Initializes the current workspace settings, loading in the link field, as well as the states and
@@ -59,9 +46,21 @@ Ext.define("cross-workspace-list", {
             context: this.getContext()
         });
         this.workspaceSettings.on('ready', this._addSelectors, this);
-        this.workspaceSettings.initialize(this.getSetting('workspaceSetting') || {}, this.getSetting('link_field') || "");
+        this.workspaceSettings.initialize(this.getSetting('workspaceSettings') || {}, this.getSetting('link_field') || "");
     },
     _addSelectors: function() {
+
+        this.down('#display_box').removeAll();
+
+        var destinationWorkspaces = this.workspaceSettings && this.workspaceSettings.getDestinationWorkspaces() || [];
+        if (destinationWorkspaces.length === 0  || this.getSetting('link_field') == "") {
+            this.down('#display_box').add({
+                xtype: 'container',
+                html: 'Use the "App Settings..." menu choice to configure this app'
+            });
+            return;
+        }
+
         var container = this.down('#selector_box');
         var cb = container.add({
             xtype: 'rallycombobox',
@@ -175,34 +174,8 @@ Ext.define("cross-workspace-list", {
                 scope: this
             }
         });
-
         loader.loadHierarchy(sourceRecords);
 
-
-
-        //var updater = Ext.create('Rally.technicalservices.artifactCopier',{
-        //    fieldsToCopy: this.fieldsToUpdate,
-        //    linkField: this.getLinkField(),
-        //    context: this.getContext(),
-        //    listeners: {
-        //        scope: this,
-        //        artifactupdated: function(originalArtifact){
-        //            this.logger.log('artifactupdated', originalArtifact);
-        //            Rally.ui.notify.Notifier.showUpdate({artifact: originalArtifact});
-        //            this.down('#link-grid').getStore().reload();
-        //        },
-        //        updateerror: function(msg){
-        //
-        //        },
-        //        updatewarning: function(msg){
-        //            this.logger.log('updatewarning',msg);
-        //            Rally.ui.notify.Notifier.showWarning({message: msg});
-        //        }
-        //    }
-        //});
-        //_.each(records_to_update, function(r){
-        //    updater.updateFromLinkedArtifact(r);
-        //});
     },
 
     getLinkField: function(){
@@ -340,7 +313,7 @@ Ext.define("cross-workspace-list", {
     syncRecords: function(sourceRecords){
         var syncer = Ext.create('CArABU.technicalservices.ArtifactSyncer',{
             workspaceSettings: this.getWorkspaces(),
-            copyFields: this.getFieldsToCopy().concat['LastUpdateDate'],
+            copyFields: this.getFieldsToCopy().concat['LastUpdateDate','Workspace','ObjectID'],
             context: this.getContext(),
             listeners: {
                 syncerror: function(error){
@@ -503,6 +476,6 @@ Ext.define("cross-workspace-list", {
     onSettingsUpdate: function (settings){
         this.logger.log('onSettingsUpdate',settings, this.workspaceSettings);
         // Ext.apply(this, settings);
-        this._validateApp();
+        this._initializeWorkspaceSettings();
     }
 });
