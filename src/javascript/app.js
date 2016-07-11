@@ -18,13 +18,7 @@ Ext.define("cross-workspace-list", {
             fieldsToUpdate: ['Name','Description','PlanEstimate','ScheduleState'],
             gridFields: ['FormattedID','Name','ScheduleState','PlanEstimate'],
             copyFields: ['Name','ScheduleState','Description','PlanEstimate','State','PlannedStartDate','PlannedEndDate'],
-            //            {
-            //    'hierarchicalrequirement': ['Name','ScheduleState','Description','PlanEstimate'],
-            //    'task': ['Name','State','Description'],
-            //    'portfolioitem': ['Name','State','PlannedStartDate','PlannedEndDate']
-            //},
-            syncFields: {},
-            workspaceSettings: {}
+            workspaceSettings: ""
         }
     },
 
@@ -33,7 +27,9 @@ Ext.define("cross-workspace-list", {
 
     launch: function() {
 
-        this._initializeWorkspaceSettings()
+        CArABU.technicalservices.WorkspaceSettingsUtility.context = this.getContext();
+
+        this._initializeWorkspaceSettingsHash(this.getSettings());
     },
     /**
      * Initializes the current workspace settings, loading in the link field, as well as the states and
@@ -41,18 +37,42 @@ Ext.define("cross-workspace-list", {
      * @returns {Deft.Deferred}
      * @private
      */
-    _initializeWorkspaceSettings: function(){
-        this.workspaceSettings = Ext.create('CArABU.technicalservices.WorkspaceSettings',{
-            context: this.getContext()
+    _initializeWorkspaceSettingsHash: function(settings){
+
+        CArABU.technicalservices.WorkspaceSettingsUtility.initializeWorkspaceSettingsHash(settings.workspaceSettings, this.getContext(), settings.link_field).then({
+            success: function(workspaceSettingsHash){
+                this.logger.log('_initializeWorkspaceSettingsHash SUCCESS', workspaceSettingsHash);
+                //CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash = workspaceSettingsHash;
+                //this.workspaceSettingsHash = workspaceSettingsHash;
+                this._addSelectors();
+            },
+            failure: function(errorMsg){
+                this.logger.log('_initializeWorkspaceSettingsHash FAILURE', errorMsg);
+                Rally.ui.notify.Notifier.showError({
+                    message: "Error initializing workspace settings: " + errorMsg
+                });
+
+            },
+            scope: this
         });
-        this.workspaceSettings.on('ready', this._addSelectors, this);
-        this.workspaceSettings.initialize(this.getSetting('workspaceSettings') || {}, this.getSetting('link_field') || "");
+
+
+        //this.workspaceSettings = Ext.create('CArABU.technicalservices.WorkspaceSettings',{
+        //    context: this.getContext()
+        //});
+        //this.workspaceSettings.on('ready', this._addSelectors, this);
+        //this.logger.log('workspace settings', this.getSetting('workspaceSettings'));
+        //this.workspaceSettings.initialize(this._getDecodedWorkspaceSettings(), this.getSetting('link_field') || "");
+    },
+    getWorkspaceSettingsHash: function(){
+        return CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash;
     },
     _addSelectors: function() {
 
         this.down('#display_box').removeAll();
 
-        var destinationWorkspaces = this.workspaceSettings && this.workspaceSettings.getDestinationWorkspaces() || [];
+       // var destinationWorkspaces = this.workspaceSettings && this.workspaceSettings.getDestinationWorkspaces() || [];
+        var destinationWorkspaces = CArABU.technicalservices.WorkspaceSettingsUtility.getDestinationWorkspaceConfigurations(this.getWorkspaceSettingsHash()) || [];
         if (destinationWorkspaces.length === 0  || this.getSetting('link_field') == "") {
             this.down('#display_box').add({
                 xtype: 'container',
@@ -147,7 +167,7 @@ Ext.define("cross-workspace-list", {
     _sync: function(){
 
         var sourceRecords= [], //Todo handle paging
-            linkField = this.getWorkspaces().getLinkField();
+            linkField = this.getLinkField();
 
         this.down('rallygridboard').getGridOrBoard().getStore().each(function(r){
             if (r.get(linkField)){
@@ -158,10 +178,10 @@ Ext.define("cross-workspace-list", {
         this.logger.log('_sync', sourceRecords);
 
         var loader = Ext.create('CArABU.technicalservices.ArtifactLoader',{
-            portfolioItemTypes: this.workspaceSettings.getCurrentWorkspace().portfolioItemTypes,
             loadLinkedItems: true,
-            workspaceSettings: this.getWorkspaces(),
-            copyFields: this.getFieldsToCopy().concat(['LastUpdateDate',linkField]),
+            workspaceSettings: this.getWorkspaceSettingsHash(),
+            linkField: CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspaceLinkField(),
+            copyFields: CArABU.technicalservices.WorkspaceSettingsUtility.copyFields.concat(['LastUpdateDate',linkField]),
             listeners: {
                 loaderror: function(error){
                     this.logger.log('loaderror',error);
@@ -179,7 +199,7 @@ Ext.define("cross-workspace-list", {
     },
 
     getLinkField: function(){
-        return this.getWorkspaces().getCurrentWorkspace().linkField;
+        return this.getSetting('link_field');
     },
     getGridFields: function(){
         //Todo make sure this is returned as an array in Rally
@@ -225,9 +245,7 @@ Ext.define("cross-workspace-list", {
         this.logger.log('columnCfgs', cols);
         return cols;
     },
-    getTypesToCopy: function(type){
-        return this.getWorkspaces().getCopyableTypes(type);
-    },
+
     getFieldsToCopy: function(){
         return ['Name','ScheduleState','Description','PlanEstimate','State','PlannedStartDate','PlannedEndDate'];
     },
@@ -281,7 +299,6 @@ Ext.define("cross-workspace-list", {
             gridConfig: {
                 store: store,
                 storeConfig: {
-                   // filters: this.getFilters(),
                     pageSize: 200
                 },
                 noDataPrimaryText: this.getNoDataPrimaryText(),
@@ -291,16 +308,16 @@ Ext.define("cross-workspace-list", {
                     items: [{
                         xtype: 'bulkmenuitemxworkspacecopy' ,
                         linkField: this.getLinkField(),
-                        typesToCopy: this.getTypesToCopy(type),
-                        copyFields: this.getFieldsToCopy(),
-                        workspaceSettings: this.getWorkspaces(),
+                        typesToCopy: CArABU.technicalservices.WorkspaceSettingsUtility.getCopyableTypes(type, this.getWorkspaceSettingsHash(),this.getContext()),
+                        copyFields: CArABU.technicalservices.WorkspaceSettingsUtility.copyFields,
+                        workspaceSettings: this.getWorkspaceSettingsHash(),
                         context: this.getContext()
                     },{
                         xtype: 'bulkmenuitemxworkspacedeepcopy' ,
                         linkField: this.getLinkField(),
-                        typesToCopy: this.getTypesToCopy(type),
-                        copyFields: this.getFieldsToCopy(),
-                        workspaceSettings: this.getWorkspaces(),
+                        typesToCopy: CArABU.technicalservices.WorkspaceSettingsUtility.getCopyableTypes(type, this.getWorkspaceSettingsHash(),this.getContext()),
+                        copyFields: CArABU.technicalservices.WorkspaceSettingsUtility.copyFields,
+                        workspaceSettings: this.getWorkspaceSettingsHash(),
                         context: this.getContext()
                     }]
                 }
@@ -312,8 +329,8 @@ Ext.define("cross-workspace-list", {
 
     syncRecords: function(sourceRecords){
         var syncer = Ext.create('CArABU.technicalservices.ArtifactSyncer',{
-            workspaceSettings: this.getWorkspaces(),
-            copyFields: this.getFieldsToCopy().concat['LastUpdateDate','Workspace','ObjectID'],
+            workspaceSettings: this.getWorkspaceSettingsHash(),
+            copyFields: CArABU.technicalservices.WorkspaceSettingsUtility.concat[CArABU.technicalservices.WorkspaceSettingsUtility.syncFetchFields],
             context: this.getContext(),
             listeners: {
                 syncerror: function(error){
@@ -332,123 +349,6 @@ Ext.define("cross-workspace-list", {
         });
         syncer.sync(sourceRecords);
     },
-    //_gatherData: function(settings) {
-    //    this.down('#display_box').removeAll();
-    //
-    //    this.logger.log("Settings are:", settings);
-    //    var linkField = this.getLinkField();
-    //
-    //    var model_name = 'UserStory';
-    //    var field_names = _.uniq(['FormattedID'].concat(this.fieldsToCopy).concat([linkField]).concat(this.fieldsToUpdate));
-    //    this.logger.log('_gatherData',field_names, linkField);
-    //
-    //    var filters = [{property:linkField, operator:'contains', value: 'href' }];
-    //
-    //    Ext.create('Rally.data.wsapi.Store',{
-    //        model: model_name,
-    //        fetch: field_names,
-    //        filters: filters,
-    //        autoLoad: true,
-    //        listeners: {
-    //            scope: this,
-    //            load: function(store, records, success){
-    //                this.logger.log('store',store, records);
-    //                var fields = this.getGridFields().concat(linkField);
-    //                this._displayGrid(store,fields,linkField);
-    //            }
-    //        }
-    //    });
-    //},
-    //
-    //_displayGrid: function(store,field_names, link_field){
-    //
-    //    if (this.down('#link-grid')){
-    //        this.down('#link-grid').destroy();
-    //    }
-    //
-    //    var field_names = ['FormattedID','Name','ScheduleState'].concat(link_field);
-    //
-    //    var columnCfgs = [];
-    //
-    //    _.each(field_names, function(f){
-    //        if (f == link_field){
-    //            columnCfgs.push({
-    //                dataIndex: f,
-    //                text: f
-    //            });
-    //        } else {
-    //            columnCfgs.push({dataIndex: f, text: f});
-    //        }
-    //    }, this);
-    //
-    //    this.down('#display_box').add({
-    //        xtype: 'rallygrid',
-    //        itemId: 'link-grid',
-    //        store: store,
-    //        columnCfgs: columnCfgs,
-    //        showRowActionsColumn: false
-    //    });
-    //},
-//    _launchCopyDialog: function() {
-//
-//        var filters = [{property:this.link_field, value: null }];
-//        var fetch = [this.link_field].concat(this.fieldsToCopy);
-//        this.logger.log('_launchCopyDialog',  this.fieldsToCopy, fetch);
-//
-//        Ext.create('Rally.technicalservices.dialog.CopyDialog', {
-//            artifactTypes: ['userstory'],
-//            storeConfig: {
-//                fetch: fetch,
-//                filters: filters,
-//                context: {
-//                    workspace: this.getContext().getWorkspace()._ref,
-//                    project: this.getContext().getProject()._ref,
-//                    projectScopeDown: this.getContext().getProjectScopeDown()
-//                }
-//            },
-//            autoShow: true,
-//            height: 400,
-//            title: 'Copy',
-//            introText: 'Choose a target workspace/project and search for a story to copy',
-//            multiple: false,
-//            listeners: {
-//                artifactchosen: function(dialog, selection){
-//                    // {selectedRecords: x, targetProject: y, targetWorkspace: z }
-//                    // selectedRecords is a model.  (In an array if multiple was true)
-//                    // targetproject, targetworkspace are hashes (do not respond to .get('x'), but to .x
-//                    this.logger.log('selected:',selection);
-//
-//                    var copier = Ext.create('Rally.technicalservices.artifactCopier',{
-//                        fieldsToCopy: this.fieldsToCopy,
-//                        linkField: this.getSetting('link_field'),
-//                        context: this.getContext(),
-//                        listeners: {
-//                            scope: this,
-//                            artifactcreated: function(newArtifact){
-//                                console.log('artifactcreated',newArtifact);
-////                                this.down('#link-grid').getStore().reload();
-//                                Rally.ui.notify.Notifier.showCreate({artifact: newArtifact});
-//                            },
-//                            copyerror: function(error_msg){
-//                                Rally.ui.notify.Notifier.showError({message: error_msg});
-//                            },
-//                            artifactupdated: function(originalArtifact){
-//                                this.logger.log('artifactupdated', originalArtifact);
-//                                Rally.ui.notify.Notifier.showUpdate({artifact: originalArtifact});
-//                                this.down('#link-grid').getStore().reload();
-//                            },
-//                            updateerror: function(msg){
-//                                this.logger.log('updateerror',msg);
-//                                Rally.ui.notify.Notifier.showError({message: msg});
-//                            }
-//                        }
-//                    });
-//                    copier.copy(selection.targetWorkspace, selection.targetProject, selection.selectedRecords);
-//                },
-//                scope: this
-//            }
-//        });
-//    },
     getSettingsFields: function(){
         return CrossWorkspaceCopier.Settings.getFields(this.workspaceSettings);
     },
@@ -475,7 +375,6 @@ Ext.define("cross-workspace-list", {
     //onSettingsUpdate:  Override
     onSettingsUpdate: function (settings){
         this.logger.log('onSettingsUpdate',settings, this.workspaceSettings);
-        // Ext.apply(this, settings);
-        this._initializeWorkspaceSettings();
+        this._initializeWorkspaceSettingsHash(settings);
     }
 });
