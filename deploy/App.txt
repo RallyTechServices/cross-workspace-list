@@ -3,12 +3,12 @@
 <head>
     <title>Cross Workspace List</title>
     <!--  (c) 2016 CA Technologies.  All Rights Reserved. -->
-    <!--  Build Date: Sun Jul 10 2016 21:21:17 GMT-0600 (MDT) -->
+    <!--  Build Date: Tue Jul 12 2016 18:02:28 GMT-0600 (MDT) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Sun Jul 10 2016 21:21:17 GMT-0600 (MDT)";
+        var APP_BUILD_DATE = "Tue Jul 12 2016 18:02:28 GMT-0600 (MDT)";
         var BUILDER = "kcorkan";
-        var CHECKSUM = 528536137117;
+        var CHECKSUM = 586133938303;
     </script>
     
     <script type="text/javascript" src="/apps/2.1/sdk.js"></script>
@@ -202,239 +202,6 @@ Ext.define('Rally.technicalservices.Logger',{
     }
 
 });
-
-//Ext.define('Rally.technicalservices.artifactCopier',{
-//    logger: new Rally.technicalservices.Logger(),
-//
-//    mixins: {
-//        observable: 'Ext.util.Observable'
-//    },
-//    /**
-//     * Passed config:
-//     *    fieldsToCopy: ['Name','Owner','Description'],
-//     *    linkField: this.getSetting('link_field'),
-//     */
-//
-//    constructor: function(config){
-//        Ext.apply(this,config);
-//
-//        this.mixins.observable.constructor.call(this, config);
-//
-//        this.addEvents(
-//            'artifactcreated',
-//            'artifactupdated',
-//            'copyerror',
-//            'updateerror',
-//            'validationfailed',
-//            'updatewarning'
-//        );
-//    },
-//
-//    copy: function(targetWorkspace, targetProject, artifact){
-//        this._getModel(targetWorkspace, targetProject, artifact.get('_type')).then({
-//            scope: this,
-//            success: function(model){
-//                var validation_issues = this._validateFields(this.fieldsToCopy, model, artifact);
-//                if (validation_issues && validation_issues.length > 0 ){
-//                    this.fireEvent('copyerror', validation_issues);
-//                } else {
-//                    this._createArtifact(model,artifact, targetWorkspace, targetProject);
-//                }
-//            },
-//            failure: function(obj){
-//                this.fireEvent('copyerror', this.buildErrorMessage('Error getting the model: ', obj));
-//            }
-//        });
-//    },
-//    updateFromLinkedArtifact: function(artifact_to_be_updated){
-//
-//        var link = artifact_to_be_updated.get(this.linkField),
-//            matches = /<a.*href="\/#\/(\d+).*\/detail\/userstory\/(\d+)">(.*)<\/a>/.exec(link),
-//            objectID = null,
-//            projectOid = null,
-//            store_context = null,
-//            friendly_text = null;
-//
-//        if (!matches){
-//            this.fireEvent('updateerror', this.buildInvalidLinkData(artifact_to_be_updated));
-//            return;
-//        }
-//
-//        if (matches){
-//            objectID = matches[2] || null;
-//            projectOid =matches[1] || null;
-//            store_context = this._getLinkedContext(projectOid);
-//            friendly_text = matches[3] || 'Unknown';
-//        }
-//
-//        var filters = [{property: 'ObjectID', value: objectID}];
-//
-//        if (store_context.workspace == null || store_context.project==null){
-//            this.fireEvent('updateerror', this.buildNoLinkedContextMessage(artifact_to_be_updated,friendly_text));
-//            return;
-//        }
-//        console.log('_getLinkedArtifactInfo', objectID,store_context);
-//
-//        var store = Ext.create('Rally.data.wsapi.Store',{
-//            fetch: this.fieldsToCopy,
-//            filters: filters,
-//            context: store_context,
-//            model: 'hierarchicalrequirement'
-//        });
-//        store.load({
-//            scope: this,
-//            callback: function(records, operation){
-//                if (operation.wasSuccessful()){
-//                    if (records && records.length > 0) {
-//                        this._updateArtifact(artifact_to_be_updated, records[0]);
-//                    } else {
-//                        this.fireEvent('updatewarning', Ext.String.format('No record found for linked object {0} (ObjectID = ).  The item may have been moved or deleted.',friendly_text, objectID));
-//                    }
-//                } else {
-//                    this.fireEvent('updateerror', this.buildErrorMessage(Ext.String.format('Error loading linked object {0}',friendly_text), operation));
-//                }
-//            }
-//        });
-//    },
-//    _getLinkedContext: function(projectOid){
-//
-//        var project = null, workspace = null;
-//        Ext.Array.forEach(this.context.getPermissions().userPermissions, function(permission) {
-//            if(permission.Workspace) {
-//
-//                if (projectOid == Rally.util.Ref.getOidFromRef(permission._ref)){
-//                    project = permission._ref;
-//                    workspace = permission.Workspace;
-//                    return false;
-//                }
-//            }
-//        });
-//        return {workspace: workspace, project: project};
-//    },
-//    _updateArtifact: function(artifact_to_be_updated, source_artifact) {
-//
-//        _.each(this.fieldsToCopy, function (f) {
-//            artifact_to_be_updated.set(f, this._getFieldValue(source_artifact, f));
-//        }, this);
-//
-//        this.logger.log('_updateArtifact (dirty)', artifact_to_be_updated, source_artifact, this.fieldsToCopy);
-//        artifact_to_be_updated.save({
-//            scope: this,
-//            callback: function (record, operation) {
-//                this.logger.log('_updateArtifact callback returned',record, operation);
-//                if (operation.wasSuccessful()) {
-//                    this.fireEvent('artifactupdated', record);
-//                } else {
-//                    this.fireEvent('updateerror', this.buildErrorMessage(Ext.String.format('Error updating artifact {0}', artifact_to_be_updated.get('FormattedID')), operation));
-//                }
-//            }
-//        });
-//    },
-//    _createArtifact: function(model, artifact, targetWorkspace, targetProject){
-//
-//        var fields = {};
-//        _.each(this.fieldsToCopy, function(f){
-//            fields[f] = this._getFieldValue(artifact, f);
-//        }, this);
-//        fields[this.linkField] = this._getLinkValue(artifact, this.context.getWorkspace(), this.context.getProject());
-//
-//        this.logger.log('_createArtifact', fields);
-//        var record = Ext.create(model, fields);
-//        record.save({
-//            scope: this,
-//            callback: function(record, operation){
-//                if (operation.wasSuccessful()){
-//                    this.fireEvent('artifactcreated',record);
-//                    this._linkArtifacts(artifact, record, targetWorkspace, targetProject);
-//                } else {
-//                    this.logger.log('_createArtifact error (operation, artifact, new record)', operation, artifact, record);
-//                    this.fireEvent('copyerror',this.buildErrorMessage('Error saving artifact', operation));
-//                }
-//            }
-//        });
-//    },
-//    _validateFields: function(fields_to_copy, model, artifact){
-//        var missing_fields = [];
-//        if (!model.getField(this.linkField)){
-//            return this.buildLinkFieldMissingMessage(artifact.getField(this.linkField).displayName);
-//        }
-//
-//        _.each(fields_to_copy, function(f){
-//            if (!model.getField(f)){
-//                missing_fields.push(artifact.getField(f).displayName);
-//            }
-//        });
-//        if (missing_fields.length > 0){
-//            return this.buildFieldValidationErrorMessage(missing_fields);
-//        }
-//        return null;
-//    },
-//    _linkArtifacts: function(artifact, newArtifact, targetWorkspace, targetProject){
-//           this.logger.log('_linkArtifacts')
-//           artifact.set(this.linkField,this._getLinkValue(newArtifact, targetWorkspace, targetProject));
-//           artifact.save({
-//               scope: this,
-//               callback: function (record, operation){
-//                    if (operation.wasSuccessful()){
-//                        this.fireEvent('artifactupdated',record);
-//                    } else {
-//                        this.fireEvent('updateerror',this.buildErrorMessage('Error updating linked field.',operation));
-//                    }
-//                }
-//           });
-//    },
-//     _getLinkValue: function(artifact, workspace, project){
-//        var workspaceName = workspace.Name,
-//            projectName = project.Name,
-//            link_text = Ext.String.format('[{0}][{1}] {2}',workspaceName, projectName, artifact.get('FormattedID'));
-//
-//         return Rally.nav.DetailLink.getLink({
-//            record: artifact,
-//            text: link_text
-//        });
-//    },
-//    _getFieldValue: function(artifact, field){
-//        console.log('--',artifact.get(field), artifact.getField(field));
-//        var field_obj = artifact.getField(field);
-//        if (field_obj && field_obj.attributeDefinition && field_obj.attributeDefinition.AttributeType == 'OBJECT'){
-//            return artifact.get(field)._ref || null;
-//        }
-//        return artifact.get(field) || null;
-//    },
-//    _getModel: function(targetWorkspace, targetProject, modelType){
-//        var deferred = Ext.create('Deft.Deferred');
-//        Rally.data.ModelFactory.getModel({
-//            type: modelType,
-//            context: {
-//                workspace: targetWorkspace._ref,
-//                project: targetProject._ref
-//            },
-//            scope: this,
-//            success: function(model) {
-//                deferred.resolve(model);
-//            },
-//            failure: function(obj){
-//                deferred.reject(obj);
-//            }
-//        });
-//        return deferred;
-//    },
-//    buildErrorMessage: function(msg, operation){
-//        return Ext.String.format('{0}:  [{1}]',msg, operation.error.errors.join(','));
-//    },
-//    buildLinkFieldMissingMessage: function(field){
-//         return Ext.String.format('Validation Error:  Link field [{0}] is missing in the destination.',field);
-//    },
-//    buildFieldValidationErrorMessage: function(fields){
-//        return Ext.String.format("Validation Error(s):  Fields to copy are missing from the destination: [{0}]",fields.join(','));
-//    },
-//    buildNoLinkedContextMessage: function(artifact, friendly_text){
-//        return Ext.String.format("No valid context found for {0}, needed to update {1}.  Please verify that you have editor or higher permissions to the linked project and workspace.", friendly_text, artifact.get('FormattedID'));
-//    },
-//    buildInvalidLinkData: function(artifact){
-//        return Ext.String.format("Could not get valid linked object information from {0}.  Please inspect the revision history to see if the data for the link field {1} has changed.", artifact.get('FormattedID'), this.linkField);
-//    }
-//});
 
 /**
  * A dialog that displays artifacts to choose from and a tree
@@ -1183,9 +950,9 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
         var promises = [],
             records = this.sourceRecords,
             deferred = Ext.create('Deft.Deferred'),
-            sourceWorkspaceName = this.workspaceSettings.getCurrentContext().getWorkspace().Name,
-            sourceProjectName = this.workspaceSettings.getCurrentContext().getProject().Name,
-            linkField = this.workspaceSettings.getLinkField(this.destinationProject.get('Workspace').ObjectID);
+            sourceWorkspaceName = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspaceName(),
+            sourceProjectName = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentProjectName(),
+            linkField = CArABU.technicalservices.WorkspaceSettingsUtility.getLinkField(this.destinationProject.get('Workspace').ObjectID);
 
         Ext.Array.each(records, function(r){
             if (r.get('_type').toLowerCase() !== 'task'){
@@ -1211,9 +978,9 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
             promises = [],
             deferred = Ext.create('Deft.Deferred'),
             destProjectRef = this.destinationProject.get('_ref'),
-            sourceWorkspaceName = this.workspaceSettings.getCurrentContext().getWorkspace().Name,
-            sourceProjectName = this.workspaceSettings.getCurrentContext().getProject().Name,
-            linkField = this.workspaceSettings.getLinkField(this.destinationProject.get('Workspace').ObjectID);
+            sourceWorkspaceName = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspaceName(),
+            sourceProjectName = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentProjectName(),
+            linkField = CArABU.technicalservices.WorkspaceSettingsUtility.getLinkField(this.destinationProject.get('Workspace').ObjectID);
 
         this.logger.log('_copyTasks', linkField);
         Ext.Array.each(this.sourceRecords, function(r){
@@ -1285,7 +1052,7 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
         return deferred;
     },
     _updateSourceLinks: function(){
-        var sourceLinkField = this.workspaceSettings.getCurrentWorkspace().linkField,
+        var sourceLinkField = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspaceLinkField(),
             deferred = Ext.create('Deft.Deferred'),
             workspaceName = this.destinationProject.get('Workspace')._refObjectName,
             projectName = this.destinationProject.get('Name'),
@@ -1442,7 +1209,7 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
     },
     _getMappedValue: function(sourceValue, fieldName, sourceType){
         var destWorkspaceRef = this.destinationProject.get('Workspace')._ref,
-        valueMap = this.workspaceSettings.getValueMap(destWorkspaceRef, sourceType, fieldName);
+        valueMap = CArABU.technicalservices.WorkspaceSettingsUtility.getValueMap(destWorkspaceRef, sourceType, fieldName);
         this.logger.log('_getMappedValue', sourceValue, valueMap, destWorkspaceRef, sourceType, fieldName);
         if (!valueMap){
             return sourceValue;
@@ -1461,6 +1228,7 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
         return false;
     },
     _getLinkValue: function(artifact, workspaceName, projectName){
+        console.log('_getLinkValue', workspaceName, projectName);
         var link_text = Ext.String.format('[{0}][{1}] {2}',workspaceName, projectName, artifact.get('FormattedID'));
 
         return Rally.nav.DetailLink.getLink({
@@ -1495,7 +1263,7 @@ Ext.define('CArABU.technicalservices.ArtifactLoader',{
     },
     loadHierarchy: function(records){
         var oids = _.map(records, function(r){ return r.get('ObjectID'); }),
-            types = this._getArtifactModelTypes(),
+            types = CArABU.technicalservices.WorkspaceSettingsUtility.getArtifactModelNames(),
             find = {
                 "__At": "current",
                 "_ItemHierarchy": {$in: oids},
@@ -1518,7 +1286,7 @@ Ext.define('CArABU.technicalservices.ArtifactLoader',{
 
         lbStore.load({
             callback: function(hierarchyRecords, operation, success){
-                this.logger.log('loadHierarchy', hierarchyRecords, operation, success);
+                this.logger.log('loadHierarchy',success, hierarchyRecords, operation);
                 if (success){
                     var hierarchyOids = _.map(hierarchyRecords, function(r){ return r.get('ObjectID'); });
                     if (!hierarchyOids || hierarchyOids.length === 0){
@@ -1535,7 +1303,7 @@ Ext.define('CArABU.technicalservices.ArtifactLoader',{
                         scope: this
                     });
                 } else {
-                    var errMsg = "Error loading hierarchy: " + operation.error.errors.join(',');
+                    var errMsg = "Error loading hierarchy: " + operation && operation.error && operation.error.errors && operation.error.errors.join(',') || "Request may have timed out.  Please refresh and try again.";
                     this.fireEvent('loaderror', errMsg);
                 }
             },
@@ -1591,8 +1359,10 @@ Ext.define('CArABU.technicalservices.ArtifactLoader',{
         });
         filters = Rally.data.wsapi.Filter.or(filters);
 
-        this.logger.log('_fetchArtifactsChunk', objectIDs, filters && filters.toString(),this._getArtifactFetchList(), this._getArtifactModelTypes());
-       Ext.create('Rally.data.wsapi.artifact.Store',{
+        this.logger.log('_fetchArtifactsChunk', objectIDs, filters && filters.toString(),this._getArtifactFetchList(),
+            CArABU.technicalservices.WorkspaceSettingsUtility.getArtifactModelNames());
+
+        Ext.create('Rally.data.wsapi.artifact.Store',{
             models: CArABU.technicalservices.WorkspaceSettingsUtility.getArtifactModelNames(),
             fetch: this._getArtifactFetchList(),
             filters: filters
@@ -2463,9 +2233,8 @@ Ext.define('CA.technicalservices.BulkMenuItem.xWorkspaceDeepCopy', {
 
         predicate: function (records) {
             //TODO: Make sure that all children are valid to copy
-            var linkField = this.workspaceSettings.getCurrentWorkspace().linkField,
+            var linkField = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspaceLinkField(),
                 copiedTypes = _.map(this.typesToCopy, function(t){ return t.toLowerCase(); });
-            console.log('predicate', this.workspaceSettings.getCurrentWorkspace(), this.typesToCopy);
 
             return _.every(records, function (record) {
                 var type = record.get('_type').toLowerCase();
@@ -2481,7 +2250,7 @@ Ext.define('CA.technicalservices.BulkMenuItem.xWorkspaceDeepCopy', {
     _loadRecordsToCopy: function(options){
         var deferred = Ext.create('Deft.Deferred'),
             loader = Ext.create('CArABU.technicalservices.ArtifactLoader',{
-                portfolioItemTypes: this.workspaceSettings.getCurrentWorkspace().portfolioItemTypes,
+                portfolioItemTypes: CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspacePortfolioItemTypes(),
                 copyFields: this.copyFields,
                 listeners: {
                     loaderror: function(error){
@@ -2507,10 +2276,8 @@ Ext.define('CA.technicalservices.BulkMenuItem.xWorkspaceCopy', {
 
         predicate: function (records) {
             //TODO: Make sure that all children are valid to copy
-            var linkField = this.workspaceSettings.getCurrentWorkspace().linkField,
+            var linkField = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspaceLinkField(),
                 copiedTypes = _.map(this.typesToCopy, function(t){ return t.toLowerCase(); });
-
-            console.log('predicate', this.workspaceSettings.getCurrentWorkspace(), this.typesToCopy, linkField);
 
             return _.every(records, function (record) {
                 var type = record.get('_type').toLowerCase();
@@ -2542,6 +2309,420 @@ Ext.define('CA.technicalservices.BulkMenuItem.xWorkspaceCopy', {
         return deferred;
     }
 });
+//(function() {
+//    var Ext = window.Ext4 || window.Ext;
+//
+//    /**
+//     * Manages reading and writing preferences for various scopes (app, workspace, project, user)
+//     *
+//     *     //load app preferences
+//     *     Rally.data.PreferenceManager.load({
+//     *         appID: this.getAppId(),
+//     *         success: function(prefs) {
+//     *             //process prefs
+//     *         }
+//     *     });
+//     *
+//     *     //save app preferences
+//     *     Rally.data.PreferenceManager.update({
+//     *         appID: this.getAppId(),
+//     *         settings: {
+//     *             foo: 'bar'
+//     *         },
+//     *         success: function(updatedRecords, notUpdatedRecords) {
+//     *             //yay!
+//     *         }
+//     *     });
+//     */
+//    Ext.define('Rally.data.PreferenceManager', {
+//        mixins: ['Rally.Messageable'],
+//
+//        requires: [
+//            'Rally.data.BulkRecordUpdater',
+//            'Rally.util.Ref',
+//            'Rally.state.ScopedStateUtil'
+//        ],
+//
+//        singleton: true,
+//
+//        clientMetrics: [
+//            {
+//                beginMethod: 'load',
+//                endMethod: '_onPrefLoad',
+//                description: 'preference loaded'
+//            },
+//            {
+//                beginMethod: 'update',
+//                endMethod: '_onPrefUpdate',
+//                description: 'preference updated'
+//            },
+//            {
+//                beginMethod: 'remove',
+//                endMethod: '_onPrefRemove',
+//                description: 'preference removed'
+//            }
+//        ],
+//
+//        /**
+//         * @property
+//         *
+//         * Object used to cache preferences
+//         */
+//        cacheProvider: undefined,
+//
+//        /**
+//         * Load preferences for the specified scope
+//         * @param {Object} options
+//         * @param {String} [options.appID] the ID of the app to load preferences for
+//         * @param {Rally.util.Ref/String} [options.project] The project to load preferences for
+//         * @param {Rally.util.Ref/String} [options.workspace] The workspace to load preferences for
+//         * @param {Boolean/String} [options.filterByUser=false] Set to the user that you want to load preferences for, or true for the current user.  A value of null is also valid.
+//         * @param {String} [options.filterByName] the Name of the pref to filter by. Useful when updating a single pref instead of several settings.
+//         * @param {Ext.util.Filter[]} [options.additionalFilters] A collection of filters for additional filtering
+//         * @param {Function} [options.success] called when the prefs are loaded
+//         * @param {Object} [options.scope] scope to call success with
+//         * @param {Boolean} [options.cache] True if you want to fetch from the local storage
+//         */
+//        load: function(options) {
+//            var prefs = this._shouldUseCache(options) ? this._getNamedCachedPref(options) : null,
+//                deferred = Ext.create('Deft.Deferred');
+//
+//            if (!Ext.isEmpty(prefs) && _.size(prefs)) {
+//                this._onPrefLoad(prefs, options);
+//                deferred.resolve(prefs);
+//            } else {
+//                this._buildPrefStore(options).load({
+//                    callback: function(records) {
+//                        var prefs = this._convertRecordsToCachedPrefValue(records);
+//
+//                        if (this._shouldUseCache(options)) {
+//                            this._setCachedPref(prefs, options);
+//                        }
+//
+//                        this._onPrefLoad(prefs, options);
+//                        deferred.resolve(prefs);
+//                    },
+//                    scope: this
+//                });
+//            }
+//
+//            return deferred.promise;
+//        },
+//
+//        /**
+//         * Update settings for a preference
+//         * Provide a settings hash and this will update existing prefs or create new prefs.
+//         * @param {Object} options
+//         * @param {Object} options.settings the settings to create/update
+//         * @param {String} [options.appID] the ID of the app to save the preference for
+//         * @param {Rally.util.Ref/String} [options.project] the project to save the preference for
+//         * @param {Rally.util.Ref/String} [options.workspace] the workspace to save the preference for
+//         * @param {Boolean/String} [options.filterByUser=false] Set to the user that you want to load preferences for, or true for the current user.  A value of null is also valid.
+//         * @param {String} [options.filterByName] the Name of the pref to filter by. Useful when updating a single pref instead of several settings.
+//         * @param {Ext.util.Filter[]} [options.additionalFilters] A collection of filters for additional filtering
+//         * @param {Function} [options.success] called when the prefs are finished being updated
+//         * @param {Object} [options.scope] scope to call success with
+//         * @param {Object} [options.cache] true if you want to fetch from the local storage
+//         */
+//        update: function(options) {
+//            var store = this._buildPrefStore(options),
+//                updateOptions = options;
+//
+//            return store.load().then({
+//                success: function() {
+//                    return this._updatePreferences(store, updateOptions);
+//                },
+//                scope: this
+//            }).then({
+//                success: function(records) {
+//                    this._onPrefUpdate(records, updateOptions);
+//                    return records;
+//                },
+//                scope: this
+//            });
+//        },
+//
+//        /**
+//         * Remove a preference by name
+//         * @param {Object} options
+//         * @param {String} options.appID the ID of the app to remove the pref for
+//         * @param {String} options.filterByName name of the pref
+//         * @param {Rally.util.Ref/String} [options.project] the project to load preferences for
+//         * @param {Rally.util.Ref/String} [options.workspace] the workspace to load preferences for
+//         * @param {Ext.util.Filter[]} [options.additionalFilters] A collection of filters for additional filtering
+//         * @param {Function} [options.success] called when removal is finished
+//         * @param {Object} [options.scope] scope to call success with
+//         */
+//        remove: function(options) {
+//            if (options.name && !options.filterByName) {
+//                // support deprecated option
+//                options.filterByName = options.name;
+//            }
+//
+//            if (!options.filterByName) {
+//                Ext.Error.raise('filterByName is a required parameter for Rally.data.PreferenceManager#remove');
+//            }
+//
+//            this._buildPrefStore(options).load({
+//                callback: function(records) {
+//                    var pref = records[0];
+//                    if (pref) {
+//                        pref.destroy({
+//                            success: function() {
+//                                this._onPrefRemove(options);
+//                            },
+//                            scope: this
+//                        });
+//                    } else {
+//                        this._onPrefRemove(options);
+//                    }
+//                },
+//                scope: this
+//            });
+//
+//        },
+//
+//        _onPrefLoad: function(prefs, options) {
+//            if (options.success) {
+//                options.success.call(options.scope, prefs);
+//            }
+//        },
+//
+//        /**
+//         * @private
+//         *
+//         * Prefs can be cached with or without a name filter.
+//         * When the cached preference is updated, we need to make sure
+//         * both the filtered and unfiltered cached preferences are updated.
+//         * You can have multiple cached entries for the same preference because
+//         * the key is unique to the options passed in to PreferenceManager.
+//         */
+//        _onPrefUpdate: function(records, options) {
+//            if (options.success) {
+//                options.success.call(options.scope, records);
+//            }
+//            if (!_.isEmpty(records)) {
+//                this.publish(Rally.Message.preferenceUpdated, records);
+//            }
+//        },
+//
+//        _onPrefRemove: function(options) {
+//            if (options.filterByName) {
+//                this._removeCachedPref(options);
+//            } else {
+//                Ext.Error.raise('filterByName is a required parameter for Rally.data.PreferenceManager#remove');
+//            }
+//
+//            if (options.success) {
+//                options.success.call(options.scope);
+//            }
+//            this.publish(Rally.Message.preferenceRemoved);
+//        },
+//
+//        _convertRecordsToCachedPrefValue: function(records) {
+//            var prefs = {};
+//            if(records) {
+//                Ext.Array.forEach(records, function(record) {
+//                    var existingPref = prefs[record.get('Name')];
+//                    if (!existingPref) {
+//                        prefs[record.get('Name')] = record.get('Value');
+//                    }
+//                });
+//            }
+//            return prefs;
+//        },
+//        //
+//        _updatePreferences: function(store, options) {
+//            Ext.Object.each(options.settings, function(settingName, settingValue) {
+//                var existingPref = store.findExactRecord('Name', settingName);
+//
+//                if (Ext.isObject(settingValue)){
+//                    settingValue = Ext.JSON.encode(settingValue);
+//                }
+//
+//                if (existingPref) {
+//                    existingPref.set('Value', settingValue);
+//                } else {
+//                    var pref = {
+//                        Name: settingName,
+//                        Value: settingValue,
+//                        Project: Rally.util.Ref.getRelativeUri(options.project) || null
+//                    };
+//                    if (options.appID) {
+//                        pref.AppId = options.appID;
+//                    }
+//                    if (options.filterByUser) {
+//                        pref.User = this._getUserRef(options.filterByUser);
+//                    }
+//                    if(options.workspace) {
+//                        pref.Project = null;
+//                        pref.Workspace = Rally.util.Ref.getRelativeUri(options.workspace);
+//                    }
+//                    store.add(pref);
+//                }
+//
+//            }, this);
+//
+//            var deferred = Ext.create('Deft.Deferred');
+//            var recordsToUpdate = store.getNewRecords().concat(store.getUpdatedRecords());
+//
+//            Rally.data.BulkRecordUpdater.updateRecords({
+//                records: recordsToUpdate,
+//                success: function() {
+//                    var cachedPrefValue = this._convertRecordsToCachedPrefValue(store.getRecords());
+//                    this._setCachedPref(cachedPrefValue, options);
+//                    deferred.resolve(recordsToUpdate);
+//                },
+//                scope: this
+//            });
+//
+//            return deferred.promise;
+//        },
+//
+//        _getUserRef: function(filterByUser) {
+//            var user = (filterByUser === true) ? this._getCurrentUserRef() : filterByUser;
+//            return Rally.util.Ref.getRelativeUri(user);
+//        },
+//
+//        _buildPrefStore: function(options) {
+//            var filters = [];
+//            if (options.appID) {
+//                filters.push({
+//                    property: 'AppId',
+//                    value: options.appID
+//                });
+//            }
+//            if (options.hasOwnProperty('filterByUser')) {
+//                filters.push({
+//                    property: 'User',
+//                    value: this._getUserRef(options.filterByUser) || null
+//                });
+//            }
+//            if (options.filterByName) {
+//                filters.push({
+//                    property: 'Name',
+//                    value: options.filterByName
+//                });
+//            }
+//            if (options.hasOwnProperty('project')) {
+//                filters.push({
+//                    property: 'Project',
+//                    value: Rally.util.Ref.getRelativeUri(options.project) || null
+//                });
+//            }
+//            if (options.hasOwnProperty('workspace')) {
+//                filters.push({
+//                    property: 'Workspace',
+//                    value: Rally.util.Ref.getRelativeUri(options.workspace) || null
+//                });
+//            }
+//
+//            filters = filters.concat(options.additionalFilters || []);
+//
+//            return Ext.create('Rally.data.wsapi.Store', {
+//                requester: options.requester,
+//                model: Ext.identityFn('preference'),
+//                filters: filters,
+//                context: Rally.environment.getContext().getDataContext()
+//            });
+//        },
+//
+//        _getCurrentUserRef: function() {
+//            return '/user/' + Rally.environment.getContext().getUser().ObjectID;
+//        },
+//
+//        _getUnNamedOptions: function(options) {
+//            var unFilteredOpts = Ext.merge({}, options);
+//            delete unFilteredOpts.filterByName;
+//            return unFilteredOpts;
+//        },
+//
+//        _buildCacheKey: function(options) {
+//            if (!this.scopedStateUtil) {
+//                this.scopedStateUtil = Ext.create('Rally.state.ScopedStateUtil');
+//            }
+//
+//            return this.scopedStateUtil.getScopeString(options);
+//        },
+//
+//        _getCachedPref: function(options) {
+//            if (this.cacheProvider) {
+//                return this.cacheProvider.get(this._buildCacheKey(options));
+//            }
+//        },
+//
+//        _getNamedCachedPref: function(options) {
+//            var prefs = this._getCachedPref(options);
+//
+//            if (!Ext.isEmpty(prefs) && options.filterByName) {
+//                var namedPrefs = {};
+//                if (prefs.hasOwnProperty(options.filterByName)) {
+//                    namedPrefs[options.filterByName] = prefs[options.filterByName];
+//                }
+//                return namedPrefs;
+//            }
+//
+//            return prefs;
+//        },
+//
+//        _setCachedPref: function(prefs, options) {
+//            if (this._shouldUseCacheOrPreferenceIsAlreadyCached(options)) {
+//                if (Ext.isEmpty(prefs)) {
+//                    this._removeCachedPref(options);
+//                } else {
+//                    var oldCacheValue = this._getCachedPref(options) || {},
+//                        newCacheValue = Ext.merge(oldCacheValue, prefs);
+//
+//                    this.cacheProvider.set(this._buildCacheKey(options), newCacheValue);
+//                }
+//            }
+//        },
+//
+//        _removeCachedPref: function(options) {
+//            if (this.cacheProvider) {
+//                if (options.filterByName) {
+//                    this._removeNamedCachedPref(options);
+//                } else {
+//                    this.cacheProvider.clear(this._buildCacheKey(options));
+//                }
+//            }
+//        },
+//
+//        _removeNamedCachedPref: function(options) {
+//            var cachedPrefs = this._getCachedPref(options);
+//
+//            if (!Ext.isEmpty(cachedPrefs)) {
+//                delete cachedPrefs[options.filterByName];
+//                this.cacheProvider.set(this._buildCacheKey(options), cachedPrefs);
+//            }
+//        },
+//
+//        _shouldUseCache: function(options) {
+//            return this._isFilteredByUser(options) &&
+//                this._isCacheEnabled(options) &&
+//                !this._hasAdditionalFilters(options) &&
+//                this.cacheProvider;
+//        },
+//
+//        _isFilteredByUser: function(options) {
+//            return options && options.filterByUser;
+//        },
+//
+//        _isCacheEnabled: function(options) {
+//            return (options && options.hasOwnProperty('cache')) ? options.cache : true;
+//        },
+//
+//        _shouldUseCacheOrPreferenceIsAlreadyCached: function(options) {
+//            return this._shouldUseCache(options) || (this.cacheProvider && this.cacheProvider.get(this._buildCacheKey(options)));
+//        },
+//
+//        _hasAdditionalFilters: function(options) {
+//            return options && !Ext.isEmpty(options.additionalFilters);
+//        }
+//    });
+//})();
+//
+
 Ext.define('CrossWorkspaceCopier.Settings',{
     singleton: true,
 
@@ -2845,7 +3026,6 @@ Ext.define('CArABU.technicalservices.WorkspaceConfigurationDialog', {
             disabled: true
         }];
 
-
     },
     _initializeWorkspace: function(cb){
         if (cb && cb.disabled){
@@ -2868,20 +3048,9 @@ Ext.define('CArABU.technicalservices.WorkspaceConfigurationDialog', {
                     scope: this
                 });
             }
-
-            //Ext.create('CArABU.technicalservices.WorkspaceStore',{
-            //    workspace: cb.getRecord(),
-            //    listeners: {
-            //        ready: this._initializeDialog,
-            //        error: this._initializeDialogWithError,
-            //        scope: this
-            //    }
-            //});
         } else {
             this.down('#cb-linkField').bindStore(null);
             this.down('#cb-linkField').setDisabled(true);
-            this.down('#cb-mappingType').bindStore(null);
-            this.down('#cb-mappingType').setDisabled(true);
         }
     },
     _initializeDialog: function(otherWorkspaceStore){
@@ -3118,7 +3287,7 @@ Ext.define('CA.technicalservices.xWorkspaceCopyDialog',{
             });
         }
 
-        var workspaces = this.workspaceSettings.getDestinationWorkspaces();
+        var workspaces = CArABU.technicalservices.WorkspaceSettingsUtility.getDestinationWorkspaceConfigurations();
 
         var filters = _.map(workspaces, function(w){ return { property: "ObjectID", value: w.ObjectID}; });
         filters = Rally.data.wsapi.Filter.or(filters);
@@ -3283,8 +3452,13 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsUtility',{
             promises = [],
             deferred = Ext.create('Deft.Deferred');
 
+        console.log('-- initializeWorkspaceSettingsHash workspace settings', encodedWorkspaceSettings)
         if (encodedWorkspaceSettings && !_.isEmpty(encodedWorkspaceSettings)){
-            workspaceSettingsHash = Ext.JSON.decode(encodedWorkspaceSettings)
+            if (Ext.isString(encodedWorkspaceSettings)){
+                workspaceSettingsHash = Ext.JSON.decode(encodedWorkspaceSettings);
+            } else {
+                workspaceSettingsHash = Ext.clone(encodedWorkspaceSettings);
+            }
         }
 
         workspaceSettingsHash[context.getWorkspace().ObjectID] = {
@@ -3330,6 +3504,10 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsUtility',{
     getCurrentWorkspacePortfolioItemTypes: function(){
       return CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspace().portfolioItemTypes;
     },
+    getLinkField: function(workspaceID){
+        return CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash[workspaceID] &&
+            CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash[workspaceID].linkField;
+    },
     getCurrentWorkspaceLinkField: function(){
         return CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspace().linkField;
     },
@@ -3337,7 +3515,7 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsUtility',{
         return this.getCurrentWorkspacePortfolioItemTypes().concat(['HierarchicalRequirement','Task']);
     },
     getSettingsDataFields: function(){
-        return ['ObjectID','Name','linkField','mappings','portfolioItemTypes','portfolioItemStates','models'];
+        return ['ObjectID','Name','linkField','mappings','portfolioItemTypes','portfolioItemStates','models','_ref'];
     },
     validateSetting: function(record, maxPortfolioLevels){
         var errors = [];
@@ -3389,7 +3567,18 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsUtility',{
 
         return validFieldObjects
     },
+    getValueMap: function(workspaceRef, type, field){
+        var workspaceID = Rally.util.Ref.getOidFromRef(workspaceRef),
+            wksp = CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash[workspaceID];
 
+        return wksp.mappings && wksp.mappings[type.toLowerCase()] && wksp.mappings[type.toLowerCase()][field] || null;
+    },
+    getCurrentProjectName: function(){
+        return CArABU.technicalservices.WorkspaceSettingsUtility.context.getProject().Name;
+    },
+    getCurrentWorkspaceName: function(){
+        return CArABU.technicalservices.WorkspaceSettingsUtility.context.getWorkspace().Name;
+    }
 
 });
 
@@ -3571,6 +3760,23 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsForm',{
         }];
         return columns;
     },
+    _buildValue: function(){
+        var data = {};
+        //todo build from store
+        Ext.Array.each(this._grid.getStore().getRange(), function(r){
+            data[r.get('ObjectID')] = {
+                _ref: r.get('_ref'),
+                Name: r.get('Name'),
+                ObjectID: r.get('ObjectID'),
+                portfolioItemTypes: r.get('portfolioItemTypes'),
+                mappings: r.get('mappings')
+              //  portfolioItemStates: r.get('portfolioItemStates')
+            };
+
+        });
+        return data;
+
+    },
     /**
      * When a form asks for the data this field represents,
      * give it the name of this field and the ref of the selected project (or an empty string).
@@ -3578,10 +3784,9 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsForm',{
      * @return {Object}
      */
     getSubmitData: function() {
-        var data = {};
-        //todo build from store
-        data[this.name] = this.workspaceSettings.getEncodedValue();
-        return data;
+        var data = {}, val = this._buildValue();
+        data[this.name] = Ext.JSON.encode(val);
+        return data;  
     },
     getErrors: function() {
         var errors = [];
@@ -4174,7 +4379,7 @@ Ext.define("cross-workspace-list", {
             fieldsToUpdate: ['Name','Description','PlanEstimate','ScheduleState'],
             gridFields: ['FormattedID','Name','ScheduleState','PlanEstimate'],
             copyFields: ['Name','ScheduleState','Description','PlanEstimate','State','PlannedStartDate','PlannedEndDate'],
-            workspaceSettings: ""
+            workspaceSettings: "{}"
         }
     },
 
@@ -4185,6 +4390,7 @@ Ext.define("cross-workspace-list", {
 
         CArABU.technicalservices.WorkspaceSettingsUtility.context = this.getContext();
 
+        this.logger.log('launch', this.getSetting('workspaceSettings'));
         this._initializeWorkspaceSettingsHash(this.getSettings());
     },
     /**
@@ -4194,6 +4400,7 @@ Ext.define("cross-workspace-list", {
      * @private
      */
     _initializeWorkspaceSettingsHash: function(settings){
+        this.logger.log('_initializeWorkspaceSettingsHash', settings, settings.workspaceSettings);
 
         CArABU.technicalservices.WorkspaceSettingsUtility.initializeWorkspaceSettingsHash(settings.workspaceSettings, this.getContext(), settings.link_field).then({
             success: function(workspaceSettingsHash){
@@ -4228,6 +4435,7 @@ Ext.define("cross-workspace-list", {
         this.down('#display_box').removeAll();
 
        // var destinationWorkspaces = this.workspaceSettings && this.workspaceSettings.getDestinationWorkspaces() || [];
+        this.logger.log('_addSelectors',this.getWorkspaceSettingsHash());
         var destinationWorkspaces = CArABU.technicalservices.WorkspaceSettingsUtility.getDestinationWorkspaceConfigurations(this.getWorkspaceSettingsHash()) || [];
         if (destinationWorkspaces.length === 0  || this.getSetting('link_field') == "") {
             this.down('#display_box').add({
@@ -4486,7 +4694,7 @@ Ext.define("cross-workspace-list", {
     syncRecords: function(sourceRecords){
         var syncer = Ext.create('CArABU.technicalservices.ArtifactSyncer',{
             workspaceSettings: this.getWorkspaceSettingsHash(),
-            copyFields: CArABU.technicalservices.WorkspaceSettingsUtility.concat[CArABU.technicalservices.WorkspaceSettingsUtility.syncFetchFields],
+            copyFields: CArABU.technicalservices.WorkspaceSettingsUtility.copyFields.concat[CArABU.technicalservices.WorkspaceSettingsUtility.syncFetchFields],
             context: this.getContext(),
             listeners: {
                 syncerror: function(error){
@@ -4530,9 +4738,34 @@ Ext.define("cross-workspace-list", {
     
     //onSettingsUpdate:  Override
     onSettingsUpdate: function (settings){
-        this.logger.log('onSettingsUpdate',settings, this.workspaceSettings);
+        this.logger.log('onSettingsUpdate',settings);
         this._initializeWorkspaceSettingsHash(settings);
-    }
+    },
+
+    /**
+     * Update the settings for this app in preferences.
+     * Provide a settings hash and this will update existing prefs or create new prefs.
+     * @param options.settings the settings to create/update
+     * @param options.success called when the prefs are loaded
+     * @param options.scope scope to call success with
+     */
+    updateSettingsValues: function(options) {
+        console.log('---settings updatesettingsvalues options', options);
+
+        Rally.data.PreferenceManager.update(Ext.apply(this._getAppSettingsLoadOptions(), {
+            requester: this,
+            settings: options.settings,
+            success: function(updatedSettings) {
+                console.log('---settings updatesettingsvalues', updatedSettings, options.settings);
+                Ext.apply(this.settings, updatedSettings);
+
+                if (options.success) {
+                    options.success.call(options.scope);
+                }
+            },
+            scope: this
+        }));
+    },
 });
 
             

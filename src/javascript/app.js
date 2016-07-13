@@ -18,7 +18,7 @@ Ext.define("cross-workspace-list", {
             fieldsToUpdate: ['Name','Description','PlanEstimate','ScheduleState'],
             gridFields: ['FormattedID','Name','ScheduleState','PlanEstimate'],
             copyFields: ['Name','ScheduleState','Description','PlanEstimate','State','PlannedStartDate','PlannedEndDate'],
-            workspaceSettings: ""
+            workspaceSettings: "{}"
         }
     },
 
@@ -29,6 +29,7 @@ Ext.define("cross-workspace-list", {
 
         CArABU.technicalservices.WorkspaceSettingsUtility.context = this.getContext();
 
+        this.logger.log('launch', this.getSetting('workspaceSettings'));
         this._initializeWorkspaceSettingsHash(this.getSettings());
     },
     /**
@@ -38,6 +39,7 @@ Ext.define("cross-workspace-list", {
      * @private
      */
     _initializeWorkspaceSettingsHash: function(settings){
+        this.logger.log('_initializeWorkspaceSettingsHash', settings, settings.workspaceSettings);
 
         CArABU.technicalservices.WorkspaceSettingsUtility.initializeWorkspaceSettingsHash(settings.workspaceSettings, this.getContext(), settings.link_field).then({
             success: function(workspaceSettingsHash){
@@ -72,6 +74,7 @@ Ext.define("cross-workspace-list", {
         this.down('#display_box').removeAll();
 
        // var destinationWorkspaces = this.workspaceSettings && this.workspaceSettings.getDestinationWorkspaces() || [];
+        this.logger.log('_addSelectors',this.getWorkspaceSettingsHash());
         var destinationWorkspaces = CArABU.technicalservices.WorkspaceSettingsUtility.getDestinationWorkspaceConfigurations(this.getWorkspaceSettingsHash()) || [];
         if (destinationWorkspaces.length === 0  || this.getSetting('link_field') == "") {
             this.down('#display_box').add({
@@ -330,7 +333,7 @@ Ext.define("cross-workspace-list", {
     syncRecords: function(sourceRecords){
         var syncer = Ext.create('CArABU.technicalservices.ArtifactSyncer',{
             workspaceSettings: this.getWorkspaceSettingsHash(),
-            copyFields: CArABU.technicalservices.WorkspaceSettingsUtility.concat[CArABU.technicalservices.WorkspaceSettingsUtility.syncFetchFields],
+            copyFields: CArABU.technicalservices.WorkspaceSettingsUtility.copyFields.concat[CArABU.technicalservices.WorkspaceSettingsUtility.syncFetchFields],
             context: this.getContext(),
             listeners: {
                 syncerror: function(error){
@@ -374,7 +377,32 @@ Ext.define("cross-workspace-list", {
     
     //onSettingsUpdate:  Override
     onSettingsUpdate: function (settings){
-        this.logger.log('onSettingsUpdate',settings, this.workspaceSettings);
+        this.logger.log('onSettingsUpdate',settings);
         this._initializeWorkspaceSettingsHash(settings);
-    }
+    },
+
+    /**
+     * Update the settings for this app in preferences.
+     * Provide a settings hash and this will update existing prefs or create new prefs.
+     * @param options.settings the settings to create/update
+     * @param options.success called when the prefs are loaded
+     * @param options.scope scope to call success with
+     */
+    updateSettingsValues: function(options) {
+        console.log('---settings updatesettingsvalues options', options);
+
+        Rally.data.PreferenceManager.update(Ext.apply(this._getAppSettingsLoadOptions(), {
+            requester: this,
+            settings: options.settings,
+            success: function(updatedSettings) {
+                console.log('---settings updatesettingsvalues', updatedSettings, options.settings);
+                Ext.apply(this.settings, updatedSettings);
+
+                if (options.success) {
+                    options.success.call(options.scope);
+                }
+            },
+            scope: this
+        }));
+    },
 });
