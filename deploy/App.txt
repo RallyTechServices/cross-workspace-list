@@ -1,16 +1,17 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Cross-Workspace Tracker</title>
-    <!--  (c) 2015 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Fri Jun 12 2015 15:14:52 GMT-0600 (MDT) -->
+    <title>Cross Workspace List</title>
+    <!--  (c) 2016 CA Technologies.  All Rights Reserved. -->
+    <!--  Build Date: Sat Jul 16 2016 17:45:55 GMT-0600 (MDT) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Fri Jun 12 2015 15:14:52 GMT-0600 (MDT)";
-        var CHECKSUM = 36357437868;
+        var APP_BUILD_DATE = "Sat Jul 16 2016 17:45:55 GMT-0600 (MDT)";
+        var BUILDER = "kcorkan";
+        var CHECKSUM = 420460516652;
     </script>
     
-    <script type="text/javascript" src="/apps/2.0/sdk.js"></script>
+    <script type="text/javascript" src="/apps/2.1/sdk.js"></script>
 
     <script type="text/javascript">
         Rally.onReady(function() {
@@ -20,7 +21,7 @@
  */
 
 Ext.define('Rally.technicalservices.InfoLink',{
-    extend: 'Ext.Component',
+    extend: 'Rally.ui.dialog.Dialog',
     alias: 'widget.tsinfolink',
     
     /**
@@ -35,33 +36,46 @@ Ext.define('Rally.technicalservices.InfoLink',{
      * cfg {String} title
      * The title for the dialog box
      */
-     title: "Build Information",
+    title: "Build Information",
     
-    renderTpl: "<div id='{id}-infolinkWrap' class='tsinfolink'>i</div>",
+    defaults: { padding: 5, margin: 5 },
 
+    closable: true,
+     
+    draggable: true,
+
+    autoShow: true,
+   
+    width: 350,
+    
+    informationalConfig: null,
+    
+    items: [{xtype:'container', itemId:'information' }],
+    
     initComponent: function() {
+        var id = Ext.id(this);
+        this.title =  "<span class='icon-help'> </span>" + this.title;
         this.callParent(arguments);
-       
     },
     
-    onRender: function() {
-        this.callParent(arguments);
-        this.mon(this.el,'click',this.onClick,this);
-    },
     _generateChecksum: function(string){
         var chk = 0x12345678,
             i;
         string = string.replace(/var CHECKSUM = .*;/,"");
+        string = string.replace(/var BUILDER = .*;/,"");
         string = string.replace(/\s/g,"");  //Remove all whitespace from the string.
-        
+       
         for (i = 0; i < string.length; i++) {
             chk += (string.charCodeAt(i) * i);
         }
-    
+   
         return chk;
     },
+    
     _checkChecksum: function(container) {
+        var deferred = Ext.create('Deft.Deferred');
         var me = this;
+        
         Ext.Ajax.request({
             url: document.URL,
             params: {
@@ -70,50 +84,101 @@ Ext.define('Rally.technicalservices.InfoLink',{
             success: function (response) {
                 text = response.responseText;
                 if ( CHECKSUM ) {
-                    if ( CHECKSUM !== me._generateChecksum(text) ) {
-                        console.log("Checksums don't match!");
-                        if ( me.dialog ) {
-                            me.dialog.add({xtype:'container',html:'Checksums do not match'});
-                        }
+                    var stored_checksum = me._generateChecksum(text);
+                    if ( CHECKSUM !== stored_checksum ) {
+                        deferred.resolve(false);
+                        return;
                     }
                 }
+                deferred.resolve(true);
             }
         });
+        
+        return deferred.promise;
     },
-    onClick: function(e) {
-        var me = this;
-        this._checkChecksum(this);
+    
+    _addToContainer: function(container){
+        var config = Ext.apply({
+            xtype:'container',
+            height: 200,
+            overflowY: true
+        }, this.informationalConfig);
         
-        var dialog_items = [];
+        container.add(config);
+    },
+    
+    afterRender: function() {
+        var app = Rally.getApp();
         
-        if ( this.informationHtml ) {
-            dialog_items.push({
+        if ( !Ext.isEmpty( this.informationalConfig ) ) {
+            var container = this.down('#information');
+            this._addToContainer(container);
+            
+        }
+        
+        if (! app.isExternal() ) {
+            this._checkChecksum(app).then({
+                scope: this,
+                success: function(result){
+                    if ( !result ) {
+                        this.addDocked({
+                            xtype:'container',
+                            cls: 'build-info',
+                            dock: 'bottom',
+                            padding: 2,
+                            html:'<span class="icon-warning"> </span>Checksums do not match'
+                        });
+                    }
+                },
+                failure: function(msg){
+                    console.log("oops:",msg);
+                }
+            });
+        } else {
+            this.addDocked({
                 xtype:'container',
-                html: this.informationHtml
+                cls: 'build-info',
+                padding: 2,
+                dock: 'bottom',
+                html:'... Running externally'
             });
         }
-                
-        dialog_items.push({
+        this.callParent(arguments);
+    },
+    
+    beforeRender: function() {
+        var me = this;
+        this.callParent(arguments);
+
+        if (this.informationHtml) {
+            this.addDocked({
+                xtype: 'component',
+                componentCls: 'intro-panel',
+                padding: 2,
+                html: this.informationHtml,
+                doc: 'top'
+            });
+        }
+        
+        this.addDocked({
             xtype:'container',
-            html:"This app was created by the Rally Technical Services Team."
+            cls: 'build-info',
+            padding: 2,
+            dock:'bottom',
+            html:"This app was created by the CA AC Technical Services Team."
         });
         
         if ( APP_BUILD_DATE ) {
-            dialog_items.push({
+            this.addDocked({
                 xtype:'container',
-                html:'Build date/time: ' + APP_BUILD_DATE
+                cls: 'build-info',
+                padding: 2,
+                dock: 'bottom',
+                html: Ext.String.format("Build date/time: {0} ({1})",
+                    APP_BUILD_DATE,
+                    BUILDER)
             });
         }
-        
-        if (this.dialog){this.dialog.destroy();}
-        this.dialog = Ext.create('Rally.ui.dialog.Dialog',{
-            defaults: { padding: 5, margin: 5 },
-            closable: true,
-            draggable: true,
-            title: me.title,
-            items: dialog_items
-        });
-        this.dialog.show();
     }
 });
 
@@ -136,239 +201,6 @@ Ext.define('Rally.technicalservices.Logger',{
         window.console && console.log.apply(console,output_args);
     }
 
-});
-
-Ext.define('Rally.technicalservices.artifactCopier',{
-    logger: new Rally.technicalservices.Logger(),
-
-    mixins: {
-        observable: 'Ext.util.Observable'
-    },
-    /**
-     * Passed config:
-     *    fieldsToCopy: ['Name','Owner','Description'],
-     *    linkField: this.getSetting('link_field'),
-     */
-
-    constructor: function(config){
-        Ext.apply(this,config);
-
-        this.mixins.observable.constructor.call(this, config);
-
-        this.addEvents(
-            'artifactcreated',
-            'artifactupdated',
-            'copyerror',
-            'updateerror',
-            'validationfailed',
-            'updatewarning'
-        );
-    },
-
-    copy: function(targetWorkspace, targetProject, artifact){
-        this._getModel(targetWorkspace, targetProject, artifact.get('_type')).then({
-            scope: this,
-            success: function(model){
-                var validation_issues = this._validateFields(this.fieldsToCopy, model, artifact);
-                if (validation_issues && validation_issues.length > 0 ){
-                    this.fireEvent('copyerror', validation_issues);
-                } else {
-                    this._createArtifact(model,artifact, targetWorkspace, targetProject);
-                }
-            },
-            failure: function(obj){
-                this.fireEvent('copyerror', this.buildErrorMessage('Error getting the model: ', obj));
-            }
-        });
-    },
-    updateFromLinkedArtifact: function(artifact_to_be_updated){
-
-        var link = artifact_to_be_updated.get(this.linkField),
-            matches = /<a.*href="\/#\/(\d+).*\/detail\/userstory\/(\d+)">(.*)<\/a>/.exec(link),
-            objectID = null,
-            projectOid = null,
-            store_context = null,
-            friendly_text = null;
-
-        if (!matches){
-            this.fireEvent('updateerror', this.buildInvalidLinkData(artifact_to_be_updated));
-            return;
-        }
-
-        if (matches){
-            objectID = matches[2] || null;
-            projectOid =matches[1] || null;
-            store_context = this._getLinkedContext(projectOid);
-            friendly_text = matches[3] || 'Unknown';
-        }
-
-        var filters = [{property: 'ObjectID', value: objectID}];
-
-        if (store_context.workspace == null || store_context.project==null){
-            this.fireEvent('updateerror', this.buildNoLinkedContextMessage(artifact_to_be_updated,friendly_text));
-            return;
-        }
-        console.log('_getLinkedArtifactInfo', objectID,store_context);
-
-        var store = Ext.create('Rally.data.wsapi.Store',{
-            fetch: this.fieldsToCopy,
-            filters: filters,
-            context: store_context,
-            model: 'hierarchicalrequirement'
-        });
-        store.load({
-            scope: this,
-            callback: function(records, operation){
-                if (operation.wasSuccessful()){
-                    if (records && records.length > 0) {
-                        this._updateArtifact(artifact_to_be_updated, records[0]);
-                    } else {
-                        this.fireEvent('updatewarning', Ext.String.format('No record found for linked object {0} (ObjectID = ).  The item may have been moved or deleted.',friendly_text, objectID));
-                    }
-                } else {
-                    this.fireEvent('updateerror', this.buildErrorMessage(Ext.String.format('Error loading linked object {0}',friendly_text), operation));
-                }
-            }
-        });
-    },
-    _getLinkedContext: function(projectOid){
-
-        var project = null, workspace = null;
-        Ext.Array.forEach(this.context.getPermissions().userPermissions, function(permission) {
-            if(permission.Workspace) {
-
-                if (projectOid == Rally.util.Ref.getOidFromRef(permission._ref)){
-                    project = permission._ref;
-                    workspace = permission.Workspace;
-                    return false;
-                }
-            }
-        });
-        return {workspace: workspace, project: project};
-    },
-    _updateArtifact: function(artifact_to_be_updated, source_artifact) {
-
-        _.each(this.fieldsToCopy, function (f) {
-            artifact_to_be_updated.set(f, this._getFieldValue(source_artifact, f));
-        }, this);
-
-        this.logger.log('_updateArtifact (dirty)', artifact_to_be_updated, source_artifact, this.fieldsToCopy);
-        artifact_to_be_updated.save({
-            scope: this,
-            callback: function (record, operation) {
-                this.logger.log('_updateArtifact callback returned',record, operation);
-                if (operation.wasSuccessful()) {
-                    this.fireEvent('artifactupdated', record);
-                } else {
-                    this.fireEvent('updateerror', this.buildErrorMessage(Ext.String.format('Error updating artifact {0}', artifact_to_be_updated.get('FormattedID')), operation));
-                }
-            }
-        });
-    },
-    _createArtifact: function(model, artifact, targetWorkspace, targetProject){
-
-        var fields = {};
-        _.each(this.fieldsToCopy, function(f){
-            fields[f] = this._getFieldValue(artifact, f);
-        }, this);
-        fields[this.linkField] = this._getLinkValue(artifact, this.context.getWorkspace(), this.context.getProject());
-
-        this.logger.log('_createArtifact', fields);
-        var record = Ext.create(model, fields);
-        record.save({
-            scope: this,
-            callback: function(record, operation){
-                if (operation.wasSuccessful()){
-                    this.fireEvent('artifactcreated',record);
-                    this._linkArtifacts(artifact, record, targetWorkspace, targetProject);
-                } else {
-                    this.logger.log('_createArtifact error (operation, artifact, new record)', operation, artifact, record);
-                    this.fireEvent('copyerror',this.buildErrorMessage('Error saving artifact', operation));
-                }
-            }
-        });
-    },
-    _validateFields: function(fields_to_copy, model, artifact){
-        var missing_fields = [];
-        if (!model.getField(this.linkField)){
-            return this.buildLinkFieldMissingMessage(artifact.getField(this.linkField).displayName);
-        }
-
-        _.each(fields_to_copy, function(f){
-            if (!model.getField(f)){
-                missing_fields.push(artifact.getField(f).displayName);
-            }
-        });
-        if (missing_fields.length > 0){
-            return this.buildFieldValidationErrorMessage(missing_fields);
-        }
-        return null;
-    },
-    _linkArtifacts: function(artifact, newArtifact, targetWorkspace, targetProject){
-           this.logger.log('_linkArtifacts')
-           artifact.set(this.linkField,this._getLinkValue(newArtifact, targetWorkspace, targetProject));
-           artifact.save({
-               scope: this,
-               callback: function (record, operation){
-                    if (operation.wasSuccessful()){
-                        this.fireEvent('artifactupdated',record);
-                    } else {
-                        this.fireEvent('updateerror',this.buildErrorMessage('Error updating linked field.',operation));
-                    }
-                }
-           });
-    },
-     _getLinkValue: function(artifact, workspace, project){
-        var workspaceName = workspace.Name,
-            projectName = project.Name,
-            link_text = Ext.String.format('[{0}][{1}] {2}',workspaceName, projectName, artifact.get('FormattedID'));
-
-         return Rally.nav.DetailLink.getLink({
-            record: artifact,
-            text: link_text
-        });
-    },
-    _getFieldValue: function(artifact, field){
-        console.log('--',artifact.get(field), artifact.getField(field));
-        var field_obj = artifact.getField(field);
-        if (field_obj && field_obj.attributeDefinition && field_obj.attributeDefinition.AttributeType == 'OBJECT'){
-            return artifact.get(field)._ref || null;
-        }
-        return artifact.get(field) || null;
-    },
-    _getModel: function(targetWorkspace, targetProject, modelType){
-        var deferred = Ext.create('Deft.Deferred');
-        Rally.data.ModelFactory.getModel({
-            type: modelType,
-            context: {
-                workspace: targetWorkspace._ref,
-                project: targetProject._ref
-            },
-            scope: this,
-            success: function(model) {
-                deferred.resolve(model);
-            },
-            failure: function(obj){
-                deferred.reject(obj);
-            }
-        });
-        return deferred;
-    },
-    buildErrorMessage: function(msg, operation){
-        return Ext.String.format('{0}:  [{1}]',msg, operation.error.errors.join(','));
-    },
-    buildLinkFieldMissingMessage: function(field){
-         return Ext.String.format('Validation Error:  Link field [{0}] is missing in the destination.',field);
-    },
-    buildFieldValidationErrorMessage: function(fields){
-        return Ext.String.format("Validation Error(s):  Fields to copy are missing from the destination: [{0}]",fields.join(','));
-    },
-    buildNoLinkedContextMessage: function(artifact, friendly_text){
-        return Ext.String.format("No valid context found for {0}, needed to update {1}.  Please verify that you have editor or higher permissions to the linked project and workspace.", friendly_text, artifact.get('FormattedID'));
-    },
-    buildInvalidLinkData: function(artifact){
-        return Ext.String.format("Could not get valid linked object information from {0}.  Please inspect the revision history to see if the data for the link field {1} has changed.", artifact.get('FormattedID'), this.linkField);
-    }
 });
 
 /**
@@ -995,292 +827,3211 @@ Ext.define('Rally.ui.tree.ProjectTree', {
 });
 
 
-Ext.define("TSCrossWorkspaceTracker", {
+Ext.define('CArABU.technicalservices.ArtifactCopier',{
+    logger: new Rally.technicalservices.Logger(),
+    mixins: {
+        observable: 'Ext.util.Observable'
+    },
+
+    copyFields: null,
+
+
+    constructor: function (config) {
+        this.copyFields = config.copyFields;
+
+        // The Observable constructor copies all of the properties of `config` on
+        // to `this` using Ext.apply. Further, the `listeners` property is
+        // processed to add listeners.
+        //
+        this.mixins.observable.constructor.call(this, config);
+
+        this.addEvents(
+            'copyerror',
+            'copystatus',
+            'copycomplete'
+        );
+    },
+    copyRecords: function(records, destinationProject){
+        this.logger.log('copyRecords', records, destinationProject);
+        this.fireEvent('copystatus', Ext.String.format("Beginning copy of {0} artifacts.", records && records.length || 0));
+
+        this.sourceRecords = records;
+        this.destinationProject = destinationProject;
+        this.copiedCount = 0;
+        this.totalCount = records.length;
+
+        Deft.Chain.sequence([
+            this._fetchDestinationModels,
+            this._copyStandaloneArtifacts,
+            this._copyTasks,
+            this._stitchArtifacts,
+            this._updateSourceLinks
+        ], this).then({
+            success: function(){
+                this.fireEvent('copycomplete');
+            },
+            failure: function(msg){
+                this.fireEvent('copyerror',msg);
+            },
+            scope: this
+        });
+    },
+    /**
+     * _getModelNames:  creates a hash of the source workspace => destination workspace model names
+     * and assigns them to a class level variable to be used by the _fetchDestinationModels function.
+     * This uses a promise because we may need to retrieve the
+     * portfolio item types for the destination
+     * @param records
+     * @private
+     */
+    _fetchDestinationModels: function(){
+        var models = {},
+            deferred = Ext.create('Deft.Deferred'),
+            records = this.sourceRecords,
+            destinationProject = this.destinationProject;
+
+        Ext.Array.each(records, function(r){
+            var type = r.get('_type').toLowerCase();
+            if (!models[type]){
+                models[type] = this._getDestinationModelType(type);
+            }
+        }, this);
+
+        this.logger.log('_fetchDestinationModels',models, records);
+        var context = {
+                workspace: destinationProject.get('Workspace')._ref,
+                project: destinationProject.get('_ref')
+            },
+            promises = _.map(models, function(val, key){
+                return this._fetchModel(val, context);
+            }, this);
+
+        Deft.Promise.all(promises).then({
+            success: function(results){
+                console.log('success', results);
+                var idx = 0;
+                //This assumes that the results are returned in the order they are passed, which should
+                //be a correct assumption
+                Ext.Object.each(models, function(typeName, key){
+                    models[key] = results[idx++];
+                });
+                this.modelHash = models;
+                deferred.resolve();
+            },
+            failure: function(msg){
+                deferred.reject(msg);
+            },
+            scope: this
+        });
+
+        return deferred;
+    },
+    _fetchModel: function(type, context){
+        var deferred = Ext.create('Deft.Deferred');
+
+        Rally.data.ModelFactory.getModel({
+            type: type,
+            context: context,
+            success: function(model){
+                deferred.resolve(model);
+            },
+            failure: function(){
+                deferred.reject('Failed to getModel for ' + type);
+            }
+        });
+        return deferred;
+    },
+    _copyStandaloneArtifacts: function(){
+        this.logger.log('_copyStandaloneArtifacts', this.records);
+
+        this.recordHash = {};
+        var destProjectRef = this.destinationProject.get('_ref'),
+            workspaceID = Rally.util.Ref.getOidFromRef(this.destinationProject.get('Workspace')._ref);
+
+        var promises = [],
+            records = this.sourceRecords,
+            deferred = Ext.create('Deft.Deferred'),
+            sourceWorkspaceName = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspaceName(),
+            sourceProjectName = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentProjectName(),
+            linkField = CArABU.technicalservices.WorkspaceSettingsUtility.getLinkField(workspaceID);
+
+        Ext.Array.each(records, function(r){
+            if (r.get('_type').toLowerCase() !== 'task'){
+                var overrides = {Project: destProjectRef};
+                overrides[linkField] = CArABU.technicalservices.WorkspaceSettingsUtility.getLinkValue(r, sourceWorkspaceName,sourceProjectName);
+                promises.push(this.copyArtifact(r, overrides));
+            }
+        }, this);
+
+        Deft.Promise.all(promises, this).then({
+            success: function(){
+                deferred.resolve();
+            },
+            failure: function(msg){
+                deferred.reject(msg);
+            },
+            scope: this
+        });
+        return deferred;
+    },
+    _copyTasks: function(){
+        var me = this,
+            promises = [],
+            deferred = Ext.create('Deft.Deferred'),
+            destProjectRef = this.destinationProject.get('_ref'),
+            destWorkspaceID = Rally.util.Ref.getOidFromRef(this.destinationProject.get('Workspace')._ref),
+            sourceWorkspaceName = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspaceName(),
+            sourceProjectName = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentProjectName(),
+            linkField = CArABU.technicalservices.WorkspaceSettingsUtility.getLinkField(destWorkspaceID);
+
+        this.logger.log('_copyTasks', linkField, destWorkspaceID);
+        Ext.Array.each(this.sourceRecords, function(r){
+            if (r.get('_type').toLowerCase() === 'task'){
+                //find parent
+                var parent = me._getTaskParentRef(r);
+                if (parent){
+                    me.logger.log('parentRef', parent);
+                    var overrides = {Project: destProjectRef};
+                    overrides["WorkProduct"] = parent;
+                    overrides[linkField] = CArABU.technicalservices.WorkspaceSettingsUtility.getLinkValue(r,sourceWorkspaceName,sourceProjectName);
+                    promises.push(function(){ return me.copyArtifact(r, overrides); });
+                }
+            }
+        }, this);
+
+        Deft.Chain.sequence(promises, this).then({
+            success: function(){
+                deferred.resolve();
+            },
+            failure: function(msg){
+                deferred.reject(msg);
+            },
+            scope: this
+        });
+        return deferred;
+    },
+    _stitchArtifacts: function(){
+        var deferred = Ext.create('Deft.Deferred');
+
+        //stitch non-tasks to parents:
+        //userstory to userstory parent
+        //userstory to portfolio item
+        //portfolio item to portfolio item
+        var updateRecords = [];
+
+        this._populateDestinationParents(this.recordHash);
+
+        Ext.Array.each(this.sourceRecords, function(r){
+            var sourceID = r.get('ObjectID'),
+                obj = this.recordHash[sourceID];
+
+            if (obj && obj.destinationParent && obj.destinationRecord){
+                 obj.destinationRecord.set(obj.destinationParentField, obj.destinationParent );
+                updateRecords.push(obj.destinationRecord);
+            }
+        }, this);
+
+        this.logger.log('_stitchArtifacts', updateRecords);
+
+        //if (updateRecords && updateRecords.length > 0) {
+        //
+        //    var promises = [], me = this;
+        //    Ext.Array.each(updateRecords, function (rec) {
+        //        promises.push(function() { return me._saveRecord(rec);});
+        //    });
+        //    Deft.Chain.sequence(promises).then({
+        //        success: function () {
+        //            deferred.resolve();
+        //        },
+        //        failure: function (msg) {
+        //            deferred.reject(msg);
+        //        },
+        //        scope: this
+        //    });
+        //} else {
+        //    deferred.resolve();
+        //}
+        if (updateRecords && updateRecords.length > 0){
+            var bulkUpdateStore = Ext.create('Rally.data.wsapi.batch.Store', {
+                data: updateRecords
+            });
+
+            bulkUpdateStore.sync({
+                success: function(batch) {
+                    console.log('bulkUpdateStore success', batch);
+                    deferred.resolve();
+                },
+                failure: function(batch){
+                    console.log('bulkUpdateStore failure', batch);
+                    deferred.reject();
+                }
+            });
+        } else {
+            deferred.resolve();
+        }
+
+        return deferred;
+    },
+    _saveRecord: function(record){
+        var deferred = Ext.create('Deft.Deferred');
+
+        record.save({
+            callback: function(result, operation){
+                if (operation.wasSuccessful()){
+                    deferred.resolve();
+                } else {
+                    deferred.reject("Failed to save record: " + operation && operation.error && operation.error.errors.join(','));
+                }
+            }
+        });
+        return deferred;
+    },
+    _updateSourceLinks: function(){
+        var sourceLinkField = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspaceLinkField(),
+            deferred = Ext.create('Deft.Deferred'),
+            workspaceName = this.destinationProject.get('Workspace')._refObjectName,
+            projectName = this.destinationProject.get('Name'),
+            updates = [];
+
+        Ext.Object.each(this.recordHash, function(key, obj){
+            var sourceLinkValue = CArABU.technicalservices.WorkspaceSettingsUtility.getLinkValue(obj.destinationRecord,workspaceName,projectName);
+            obj.sourceRecord.set(sourceLinkField, sourceLinkValue);
+            updates.push(obj.sourceRecord);
+        }, this);
+
+        this.logger.log('_updateSourceLinks', updates);
+        var bulkUpdateStore = Ext.create('Rally.data.wsapi.batch.Store', {
+            data: updates
+        });
+
+        bulkUpdateStore.sync({
+            success: function(batch) {
+                console.log('bulkUpdateStore success', batch);
+                deferred.resolve();
+            },
+            failure: function(batch){
+                console.log('bulkUpdateStore failure', batch);
+                deferred.reject();
+            }
+        });
+        return deferred;
+
+    },
+    _populateDestinationParents: function(recordHash){
+        //TODO, if we wanted to search the destination for a parent (assuming it was copied at an earlier date), this will allow us to do that and link up.
+        Ext.Object.each(recordHash, function(key, obj){
+            if (obj.sourceRecord.get('_type') !== 'task'){
+                var parent = obj.sourceRecord.get('Parent') || obj.sourceRecord.get('PortfolioItem') || null;
+                if (parent && parent.ObjectID && recordHash[parent.ObjectID] && recordHash[parent.ObjectID].destinationRecord){
+                    var parentDestinationRecord = recordHash[parent.ObjectID].destinationRecord;
+                    obj.destinationParent = Ext.String.format("/{0}/{1}", parentDestinationRecord.get('_type'), parentDestinationRecord.get('ObjectID'));
+                    obj.destinationParentField = this._getParentField(obj.destinationRecord, recordHash[parent.ObjectID].destinationRecord);
+                }
+            }
+        }, this);
+        this.logger.log('_populateDestinationParent', recordHash);
+    },
+    _getParentField: function(child, parent){
+        var childType = child.get('_type'),
+            parentType = parent.get('_type');
+
+        if (this._isPortfolioItem(parentType) && !this._isPortfolioItem(childType)){
+            return "PortfolioItem";
+        }
+        return "Parent";
+
+    },
+    _isPortfolioItem: function(type){
+        return /portfolioitem/.test(type.toLowerCase());
+    },
+    //_restoreStates: function(){
+    //    var deferred = Ext.create('Deft.Deferred');
+    //    //TODO:  I'm not sure this is going to be a problem...
+    //    deferred.resolve();
+    //
+    //    return deferred;
+    //},
+    _getTaskParentRef: function(sourceTaskObject){
+
+        var sourceParent = sourceTaskObject.get('WorkProduct').ObjectID;
+        if (this.recordHash[sourceParent] && this.recordHash[sourceParent].destinationRecord){
+            return this.recordHash[sourceParent].destinationRecord.get('ObjectID');
+        }
+        return null;
+    },
+    _getModel: function(type){
+        return this.modelHash[type.toLowerCase()] || null;
+    },
+    _getDestinationModelType: function(sourceType){
+
+        if (this._isPortfolioItem(sourceType)) {
+            //TODO get the mapped portfolio itme type
+            return sourceType;
+        }
+        return sourceType;
+
+    },
+    copyArtifact: function(record, overrides){
+        var deferred = Ext.create('Deft.Deferred'),
+            sourceOid = record.get('ObjectID');
+        this.logger.log('copyArtifact', record.get('FormattedID'));
+
+        this.recordHash[sourceOid] = {
+            sourceRecord: record,
+            sourceParent: null,
+            destinationRecord: null,
+            destinationParent: null,
+            error: null
+        };
+
+        var model = this._getModel(record.get('_type'));
+        if (!model){
+            //Todo handle error
+        }
+
+        this.copiedCount++;
+        this.fireEvent('copystatus', Ext.String.format("Copying {0} of {1} artifacts.", this.copiedCount, this.totalCount));
+
+        var fields = this._getFieldsToCopy(record, overrides);
+        console.log('fieldstocopy', fields);
+
+        Ext.create(model, fields).save({
+            callback: function(result, operation){
+                this.logger.log('copyArtifact callback',record.get('FormattedID'), operation.wasSuccessful(), result, operation);
+                if (operation.wasSuccessful()){
+                    this.recordHash[sourceOid].destinationRecord = result;
+                    deferred.resolve();
+                } else {
+                    this.recordHash[sourceOid].destinationRecord = result;
+                    this.recordHash[sourceOid].error = operation.error.errors.join(',');
+                    deferred.reject(operation.error.errors.join(','));
+                }
+            },
+            scope: this
+        });
+        return deferred;
+    },
+    _getFieldsToCopy: function(record, overrides){
+        var sourceFields = record.getFields(),
+            sourceType = record.get('_type'),
+            destWorkspaceRef = this.destinationProject.get('Workspace')._ref,
+            copyableFields = _.filter(sourceFields, this._fieldIsCopyable, this),
+            fieldHash = {};
+
+        this.logger.log('getFieldsToCopy',copyableFields);
+
+        Ext.Array.each(copyableFields, function(f){
+            //If there is a mapping, we need to get the mapped value
+            var val = record.get(f.name) || null;
+
+            if (Ext.isObject(val)){
+                val = val._refObjectName;
+            }
+
+            var mappedVal = CArABU.technicalservices.WorkspaceSettingsUtility.getMappedValue(record, f.name, destWorkspaceRef);
+            this.logger.log('copying fields', f.name, val, mappedVal);
+
+            this.logger.log('field', f.name, f.attributeDefinition.AttributeType, val,record.get(f.name), mappedVal);
+
+            if (mappedVal){
+                fieldHash[f.name] = mappedVal;
+            }
+        }, this);
+
+        Ext.Object.each(overrides, function(key, val){
+            fieldHash[key] = val;
+        });
+        this.logger.log('fieldHash', fieldHash);
+        return fieldHash;
+    },
+    _fieldIsCopyable: function(field){
+
+        if (Ext.Array.contains(this.copyFields, field.name) && !field.readOnly){
+            return true;
+        }
+        return false;
+    }
+
+});
+
+Ext.define('CArABU.technicalservices.ArtifactLoader',{
+    logger: new Rally.technicalservices.Logger(),
+    mixins: {
+        observable: 'Ext.util.Observable'
+    },
+
+    constructor: function (config) {
+        // The Observable constructor copies all of the properties of `config` on
+        // to `this` using Ext.apply. Further, the `listeners` property is
+        // processed to add listeners.
+        //
+        this.loadLinkedItems = config.loadLinkedItems || false;
+        this.fetchFields = config.copyFields;
+
+        this.logger.log('ArtifactLoader Constructor', config, this.fetchFields);
+        this.mixins.observable.constructor.call(this, config);
+
+        this.addEvents(
+            'loaderror',
+            'loadcomplete'
+        );
+    },
+    loadHierarchy: function(records){
+        var oids = _.map(records, function(r){ return r.get('ObjectID'); }),
+            types = CArABU.technicalservices.WorkspaceSettingsUtility.getArtifactModelNames(),
+            find = {
+                "__At": "current",
+                "_ItemHierarchy": {$in: oids},
+                "_TypeHierarchy": {$in: types}
+                //TODO, do we want to restrict projects?
+            };
+
+        if (this.loadLinkedItems){
+            var linkedField =  CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspaceLinkField(this.workspaceSettings, this.context);
+            find[linkedField] = {$ne: null}
+        }
+
+        this.logger.log('loadHierarchy', records, oids, types);
+        var lbStore = Ext.create('Rally.data.lookback.SnapshotStore',{
+            fetch: ['ObjectID'],
+            find: find,
+            limit: 'Infinity',
+            removeUnauthorizedSnapshots: true
+        });
+
+        lbStore.load({
+            callback: function(hierarchyRecords, operation, success){
+                this.logger.log('loadHierarchy',success, hierarchyRecords, operation);
+                if (success){
+                    var hierarchyOids = _.map(hierarchyRecords, function(r){ return r.get('ObjectID'); });
+                    if (!hierarchyOids || hierarchyOids.length === 0){
+                        this.fireEvent('loaderror', "No records found.");
+                    }
+                    this._fetchArtifacts(hierarchyOids).then({
+                        success: function(artifacts){
+                            this.fireEvent('loadcomplete', artifacts);
+                        },
+                        failure: function(operation){
+                            var errMsg = "Error loading records for hierarchy: " + operation.error.errors.join(',');
+                            this.fireEvent('loaderror', errMsg);
+                        },
+                        scope: this
+                    });
+                } else {
+                    var errMsg = "Error loading hierarchy: " + operation && operation.error && operation.error.errors && operation.error.errors.join(',') || "Request may have timed out.  Please refresh and try again.";
+                    this.fireEvent('loaderror', errMsg);
+                }
+            },
+            scope: this
+        });
+    },
+    load: function(records){
+        this.fireEvent('loadcomplete', records);
+    },
+    _fetchArtifacts: function(objectIDs){
+        var deferred = Ext.create('Deft.Deferred'),
+            chunks = this._getChunks(objectIDs),
+            promises = [];
+
+        Ext.Array.each(chunks, function(chunkArray){
+            promises.push(this._fetchArtifactsChunk(chunkArray));
+        }, this);
+
+        Deft.Promise.all(promises).then({
+            success: function(results){
+               deferred.resolve(_.flatten(results));
+            },
+            failure: function(operation){
+                deferred.reject(operation);
+            }
+        });
+        return deferred.promise;
+
+    },
+    _getChunks: function(objectIDs){
+        var chunks = [],
+            maxListSize = 25,
+            idx = 0;
+
+        chunks[idx] = [];
+        _.each(objectIDs, function(oid){
+            if (chunks[idx].length >= maxListSize){
+                idx++;
+                chunks[idx] = [];
+            }
+            chunks[idx].push(oid);
+        });
+
+        return chunks;
+    },
+    _fetchArtifactsChunk: function(objectIDs, options){
+        var deferred = Ext.create('Deft.Deferred'),
+            filters = _.map(objectIDs, function(o){
+            return {
+                property: 'ObjectID',
+                value: o
+            }
+        });
+        filters = Rally.data.wsapi.Filter.or(filters);
+
+        this.logger.log('_fetchArtifactsChunk', objectIDs, filters && filters.toString(),this._getArtifactFetchList(),
+            CArABU.technicalservices.WorkspaceSettingsUtility.getArtifactModelNames());
+
+        Ext.create('Rally.data.wsapi.artifact.Store',{
+            models: CArABU.technicalservices.WorkspaceSettingsUtility.getArtifactModelNames(),
+            fetch: this._getArtifactFetchList(),
+            filters: filters
+        }).load({
+            callback: function(records, operation){
+                if (operation.wasSuccessful()){
+                    deferred.resolve(records);
+                } else {
+                    deferred.reject(operation);
+                }
+            }
+        });
+        return deferred;
+    },
+
+
+    _getArtifactFetchList: function(){
+        return this.fetchFields.concat(['Parent','WorkProduct','PortfolioItem','ObjectID','Workspace','LastUpdateDate']);
+    }
+});
+
+Ext.define('CArABU.technicalservices.ArtifactSyncer',{
+    logger: new Rally.technicalservices.Logger(),
+    mixins: {
+        observable: 'Ext.util.Observable'
+    },
+
+    constructor: function(config){
+        this.workspaceSettings = config.workspaceSettings;
+        this.fetchFields = config.copyFields;
+        this.context = config.context;
+
+        this.mixins.observable.constructor.call(this, config);
+
+        this.addEvents(
+            'syncerror',
+            'syncstatus',
+            'synccomplete'
+        );
+    },
+    sync: function(sourceRecords){
+        var linkField = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspaceLinkField();
+        this.syncedRecords = [];
+        this.unsyncedRecords = [];
+        this.syncErrors = [];
+
+        var promises = [];
+        Ext.Array.each(sourceRecords, function(r){
+            promises.push(this.syncLinkedArtifact(r, linkField));
+        }, this);
+        Deft.Promise.all(promises).then({
+            success: function(){
+                this.fireEvent('synccomplete', this.syncedRecords, this.unsyncedRecords, this.syncErrors);
+            },
+            scope: this
+        });
+
+    },
+    syncLinkedArtifact: function(sourceRecord, linkField){
+        var deferred = Ext.create('Deft.Deferred');
+        var link = sourceRecord.get(linkField),
+            matches = /<a.*href=".*\/#\/(\d+).*\/detail\/.*\/(\d+)">(.*)<\/a>/.exec(link),
+            objectID = CArABU.technicalservices.WorkspaceSettingsUtility.getObjectIDFromLinkValue(link),
+            store_context = CArABU.technicalservices.WorkspaceSettingsUtility.getContextFromLinkValue(link);
+
+        if (!objectID || !store_context){
+            this.logger.log('No context or matches for artifact found:  ' + sourceRecord.get('FormattedID') ,link, matches);
+            this.unsyncedRecords.push(sourceRecord);
+            this.syncErrors.push('No context (workspace or project) or matches.  Please verify that the destination workpsce and project are configured via the App settings and the object exists.');
+            deferred.resolve();
+            return deferred;
+        }
+
+        var modelName = CArABU.technicalservices.WorkspaceSettingsUtility.getDestinationModelType(sourceRecord.get('_type'), store_context);
+        this.logger.log('syncLinkedArtifact', objectID, store_context, modelName);
+
+        Rally.data.ModelFactory.getModel({
+            type: modelName,
+            context: store_context,
+            success: function(model){
+                model.load(objectID, {
+                    fetch: this.fetchFields,
+                    callback: function(destinationRecord, operation) {
+                        if(operation.wasSuccessful()) {
+                            this.logger.log('Success', destinationRecord.get('LastUpdateDate'), sourceRecord.get('LastUpdateDate'));
+                            this._syncRecord(sourceRecord, destinationRecord).then({
+                                success: function(){
+                                    deferred.resolve();
+                                }
+                            });
+                        } else {
+                            this.unsyncedRecords.push(sourceRecord);
+                            var msg = "FAILURE to load linked record [" + objectID + "]: " + operation.error.errors.join(',');
+                            this.logger.log('FAILURE', msg, operation);
+                            this.syncErrors.push(msg);
+                            deferred.resolve();
+                        }
+                    },
+                    scope: this
+                });
+            },
+            failure: function(){
+                this.unsyncedRecords.push(sourceRecord);
+                var msg = 'FAILURE to load Model ' + modelName;
+                this.logger.log('FAILURE', msg);
+                this.fireEvent('syncerror', msg);
+                this.syncErrors.push(msg);
+                deferred.resolve();
+            },
+            scope: this
+        });
+        return deferred;
+    },
+    _syncRecord: function(sourceRecord, destinationRecord){
+        var deferred = Ext.create('Deft.Deferred');
+        var type = sourceRecord.get('_type');
+        this.logger.log('_syncRecord', sourceRecord, destinationRecord.get('LastUpdateDate'), sourceRecord.get('LastUpdateDate'), type);
+
+        var syncSource = sourceRecord,
+            syncTarget = destinationRecord;
+
+        if (sourceRecord.get('LastUpdateDate') < destinationRecord.get('LastUpdateDate')){
+            syncSource = destinationRecord;
+            syncTarget= sourceRecord;
+        }
+
+        Ext.Array.each(CArABU.technicalservices.WorkspaceSettingsUtility.getSyncFields(type), function(f){
+            var val = CArABU.technicalservices.WorkspaceSettingsUtility.getMappedValue(syncSource, f, syncTarget.get('Workspace')._ref);
+            if (Ext.isObject(val)){
+                val = val._ref;
+            }
+            syncTarget.set(f,val);
+        }, this);
+
+        syncTarget.save({
+            callback: function(record, operation){
+                if (operation.wasSuccessful()){
+                    this.logger.log('syncTarget saved', record);
+                    this.syncedRecords.push(sourceRecord);
+                    deferred.resolve();
+                } else {
+                    var msg = Ext.String.format("Failed to sync record {0}: {1}",sourceRecord.get('FormattedID'), operation.error.errors.join(','));
+                    this.logger.log('syncTarget failed', msg);
+                    this.unsyncedRecords.push(sourceRecord);
+                    this.syncErrors.push(msg);
+                    deferred.resolve();
+                }
+            },
+            scope:this
+        });
+
+        return deferred;
+    }
+
+});
+Ext.define('Rally.technicalservices.ArtifactTree',{
+    logger: new Rally.technicalservices.Logger(),
+    mixins: {
+        observable: 'Ext.util.Observable'
+    },
+
+    rootArtifact: undefined,
+    modelHash: null,
+    portfolioItemTypes: undefined,
+    childTypesBlacklist: undefined,
+    parentChildTypeMap: null,
+    blacklistFields: null,
+
+    stoppedByError: false,
+
+    constructor: function(config){
+
+        this.childTypesBlacklist = config.childTypesBlacklist || ['testcase','defectsuite','defect'];
+        this.parentChildTypeMap = this._setupParentChildMap(config.portfolioItemTypes);
+        this.modelHash = {};
+
+        this.mixins.observable.constructor.call(this, config);
+
+    },
+    load: function(rootArtifact, rootParent){
+        this.totalRecords = 1;
+        this.tree = {};
+        this.stoppedByError = false;
+        this.rootArtifact = rootArtifact;
+
+
+
+        //this._loadModel(rootArtifact);
+
+    },
+    _updateStatus: function(){
+        this.fireEvent('statusupdate', this.completedArtifacts, this.totalArtifacts);
+    },
+    deepCopy: function(){
+        this.logger.log('deepCopy');
+        var me = this;
+        this.totalArtifacts = _.keys(this.tree).length || 0;
+        this.completedArtifacts = 0;
+
+        this.fireEvent('statusupdate', 0, this.totalArtifacts);
+        var overrides = {PortfolioItem: "", Parent: ""};
+
+        this.logger.log('deepCopy.overrides',overrides);
+        me._copyStandaloneArtifacts(overrides).then({
+            success: function(){
+                this.logger.log('deepCopy. _copyStandaloneArtifacts success');
+                Deft.Chain.sequence([
+                    me._copyTasks,
+                    me._updateCollections,
+                    me._stitchArtifacts
+                ],me).then({
+                    success: function(){
+                       me.fireEvent('copycompleted', me.tree[me.rootArtifact.get('ObjectID')].copyRecord);
+
+                    },
+                    failure: function(msg){
+                        me._deleteArtifacts();
+                        me.fireEvent('copyerror',msg);
+                    },
+                    scope: me
+                });
+            },
+            failure: function(msg){
+                this.logger.log('deepCopy. _copyStandaloneArtifacts failure', msg);
+            },
+            scope: this
+        });
+    },
+    _deleteArtifacts: function(){
+        this.logger.log('_deleteArtifacts');
+        var tasks = [],
+            artifacts = [];
+
+        _.each(this.tree, function(artifact, oid) {
+            //first we need to delete tasks
+            if (artifact.copyRecord) {
+                if (artifact.copyRecord.get('_type').toLowerCase() === 'task') {
+                    tasks.push(artifact);
+                } else {
+                    artifacts.push(artifact);
+                }
+            }
+        });
+
+        var promises = [];
+        _.each(tasks, function(t){
+            promises.push(function(){ return this._deleteArtifact(t)});
+        }, this);
+        _.each(artifacts, function(a){
+            promises.push(function(){ return this._deleteArtifact(a)});
+        }, this);
+
+
+        Deft.Chain.sequence(promises, this).then({
+            success: function(){
+                this.logger.log('artifacts deleted');
+            },
+            scope: this
+        });
+    },
+    _deleteArtifact: function(artifact){
+        var deferred = Ext.create('Deft.Deferred');
+
+        artifact.deleted = false;
+        if (artifact.copyRecord){
+            var fid = artifact.copyRecord.get('FormattedID');
+            artifact.copyRecord.destroy({
+                callback: function(result, operation){
+                    this.logger.log('artifact deleted',fid, operation.wasSuccessful(), result, operation);
+                    if (operation.wasSuccessful()){
+                        artifact.copyRecord = null;
+                        artifact.deleted = true;
+                    }
+                    deferred.resolve();
+                },
+                scope: this
+            });
+        }
+        return deferred;
+    },
+    _copyStandaloneArtifacts: function(overrides){
+        this.logger.log('_copyStandaloneArtifacts', overrides);
+        var promises = [],
+            deferred = Ext.create('Deft.Deferred');
+
+        _.each(this.tree, function(obj, oid){
+            if (obj.record.get('_type').toLowerCase() !== 'task' && !obj.copyRecord){
+                promises.push(this.copyArtifact(oid, overrides));
+            }
+        }, this);
+
+        Deft.Promise.all(promises, this).then({
+            success: function(){
+                deferred.resolve();
+            },
+            failure: function(msg){
+                deferred.reject(msg);
+            },
+            scope: this
+        });
+        return deferred;
+    },
+    _stitchArtifacts: function(){
+        this.logger.log('_stitchArtifacts');
+
+        var promises = [],
+            deferred = Ext.create('Deft.Deferred');
+
+        _.each(this.tree, function(obj, oid){
+
+            var childTypes = this.parentChildTypeMap[obj.record.get('_type').toLowerCase()] || [],
+                newParentRef = obj.copyRecord && obj.copyRecord.get('_ref');
+
+            _.each(childTypes, function(ct){
+                var children = obj[ct.collectionName] || [];
+                if (children.length > 0){
+                    _.each(children, function(childOid){
+                        if (this.tree[childOid].copyRecord){
+                            this.tree[childOid].copyRecord.set(ct.parentField, newParentRef);
+                            promises.push(function(){ return this.tree[childOid].copyRecord.save(); });
+                        }
+                    }, this);
+                }
+            },this);
+        }, this);
+
+        this.logger.log('_stitchArtifacts', promises.length);
+
+        Deft.Chain.sequence(promises, this).then({
+            success: function(){
+                this.logger.log('_stitchArtifacts success');
+                deferred.resolve();
+            },
+            failure: function(msg){
+                this.logger.log('_stitchArtifacts failed', msg);
+                deferred.reject(msg);
+            },
+            scope: this
+        });
+
+        return deferred;
+    },
+    _getNewRefs: function(oldOids, collectionField){
+        var newRefs = [];
+        if (collectionField === 'Predecessors'){
+            _.each(oldOids, function(oid){
+                if (this.tree[oid] && this.tree[oid].copyRecord){
+                    newRefs.push(this.tree[oid].copyRecord.get('_ref'));
+                }
+            }, this);
+        }
+        return newRefs;
+    },
+    _updateCollections: function(){
+        var promises = [],
+            deferred = Ext.create('Deft.Deferred'),
+            collectionFields = ['Predecessors','Tags'];
+
+        _.each(this.tree, function(obj, oid) {
+            _.each(collectionFields, function (cf) {
+                console.log('_updateCollections', obj.record.get('_type'), cf, obj[cf]);
+                if (obj[cf] && obj[cf].length > 0) {
+                    if (cf === 'Predecessors') {
+                        promises.push(function () {
+                            var newRefs = this._getNewRefs(obj[cf], cf)
+                            return this._updateCollection(obj.copyRecord, cf, newRefs);
+                        });
+
+                    } else if (cf === 'Tags') {
+
+                        promises.push(function () {
+                            var newRefs = obj[cf];
+                            return this._updateCollection(obj.copyRecord, cf, newRefs);
+                        });
+                    }
+                }
+            }, this);
+        });
+
+        Deft.Chain.sequence(promises, this).then({
+            success: function(){
+                this.logger.log('_updateCollections success');
+                deferred.resolve();
+            },
+            failure: function(msg){
+                this.logger.log('_updateCollections failed', msg);
+                deferred.reject(msg);
+            },
+            scope: this
+        });
+
+        return deferred;
+    },
+    _updateCollection: function(newArtifact, collectionName, collectionRefs){
+        this.logger.log('_updateCollection', newArtifact, collectionName, collectionRefs);
+
+        var deferred = Ext.create('Deft.Deferred'),
+            store = newArtifact.getCollection(collectionName);
+
+        store.load({
+            callback: function(){
+                Ext.Array.each(collectionRefs, function(cr){
+                    store.add(cr)
+                });
+                store.sync({
+                    callback: function(){
+                        deferred.resolve();
+                    }
+                });
+            }
+        });
+        return deferred;
+    },
+
+    _updateArtifact: function(rec){
+        var deferred = Ext.create('Deft.Deferred');
+        this.logger.log('updateArtifact');
+        rec.save({
+            callback: function(result, operation){
+                if(operation.wasSuccessful()) {
+                    deferred.resolve();
+                } else {
+                    deferred.reject("Update for " + rec.get('FormattedID') + " failed: " + operation.error.errors.join(','));
+                }
+            }
+        });
+        return deferred;
+    },
+    _copyTasks: function(){
+        this.logger.log('_copyTasks');
+        var me = this,
+            promises = [],
+            deferred = Ext.create('Deft.Deferred');
+
+        _.each(this.tree, function(obj, oid){
+            if (obj.record.get('_type').toLowerCase() === 'task'){
+                //find parent
+                var parent = me._getTaskParentRef(oid);
+                if (parent){
+                    me.logger.log('parentRef', parent);
+                    promises.push(function(){ return me.copyArtifact(oid, {WorkProduct: parent}); });
+                }
+            }
+        }, this);
+
+        Deft.Chain.sequence(promises, this).then({
+            success: function(){
+                deferred.resolve();
+            },
+            failure: function(msg){
+                deferred.reject(msg);
+            },
+            scope: this
+        });
+        return deferred;
+    },
+    _getTaskParentRef: function(taskOid){
+        var parentOid = null;
+
+        _.each(this.tree, function(obj, oid){
+            var tasks = obj && obj.Tasks || [];
+            console.log(tasks, taskOid,Ext.Array.contains(tasks, Number(taskOid)));
+            if (Ext.Array.contains(tasks, Number(taskOid))){
+                parentOid = obj.copyRecord && obj.copyRecord.get('ObjectID') || null;
+                return false;
+            }
+        });
+        return parentOid;
+    },
+    copyArtifact: function(artifactOid, overrides){
+        var deferred = Ext.create('Deft.Deferred'),
+            artifact = this.tree[artifactOid].record;
+        this.logger.log('copyArtifact', artifact.get('FormattedID'));
+
+        this._fetchModel(artifact.get('_type')).then({
+            success: function(model){
+                var fields = this.getFieldsToCopy(artifact,overrides);
+
+                Ext.create(model, fields).save({
+                    callback: function(result, operation){
+                        this.logger.log('copyArtifact callback',artifact.get('FormattedID'), operation.wasSuccessful(), result, operation);
+                        if (operation.wasSuccessful()){
+                            this.tree[artifactOid].copyRecord = result;
+                            this.completedArtifacts++;
+                            this._updateStatus();
+                            deferred.resolve();
+                        } else {
+                            this.tree[artifactOid].copyRecord = null;
+                            this.tree[artifactOid].error = operation.error.errors.join(',');
+                            deferred.reject(operation.error.errors.join(','));
+                        }
+                    },
+                    scope: this
+                });
+            },
+            failure: function(msg){
+                deferred.reject(msg);
+            },
+            scope: this
+        });
+        return deferred;
+    },
+    getFieldsToCopy: function(artifactToCopy, overrideFields){
+        var fields = artifactToCopy.getFields(),
+            copyableFields = _.filter(fields, this._fieldIsCopyable, this),
+            fieldHash = {};
+
+        this.logger.log('getFieldsToCopy',copyableFields);
+
+        _.each(copyableFields, function(f){
+
+            //if field is collection and count === 0, then it can be null, otherwise, we need to copy the cooleciton
+            if (f.attributeDefinition.AttributeType !== "COLLECTION"){
+                var val = artifactToCopy.get(f.name) || null;
+
+                if (val && Ext.isObject(val)){  //If this is a reference field, then we need to use the ObjectId
+                    val = val._ref;
+                }
+
+                if (_.has(overrideFields, f.name)){
+                    val = overrideFields[f.name];
+                }
+                this.logger.log('field', f.name, f.attributeDefinition.AttributeType, val,artifactToCopy.get(f.name));
+                if (val){
+                    fieldHash[f.name] = val;
+                }
+            }
+        }, this);
+
+        return fieldHash;
+    },
+    _fieldIsCopyable: function(field){
+
+        if (Ext.Array.contains(this.blacklistFields, field.name)){
+
+            return false;
+        }
+        if (field.hidden || field.readOnly){
+
+            return false;
+        }
+        if (field.attributeDefinition){
+
+            return true;
+        }
+        return false;
+    },
+
+
+    _loadModel: function(artifact){
+        this._fetchModel(artifact.get('_type')).then({
+            success: function(model) {
+                this.logger.log('_loadModel success');
+                this._loadArtifact(model, artifact);
+            },
+            failure: function(msg){
+                this.tree[artifact.get('ObjectID')].error = msg;
+                this._checkForDoneness(msg);
+
+            },
+            scope: this
+        });
+
+    },
+    _loadArtifact: function(model, artifact){
+        this.logger.log('_loadArtifact', artifact);
+        if (this.stoppedByError){
+            return;
+        }
+
+        var oid = artifact.get('ObjectID');
+        model.load(oid, {
+            fetch: true,
+            scope: this,
+            callback: function(loadedArtifact, operation) {
+                if(operation.wasSuccessful()) {
+                    this.logger.log('_loadArtifact success', oid, loadedArtifact);
+                    this.tree[oid] = this.getTreeNode(loadedArtifact);
+                    this._loadArtifactCollections(loadedArtifact);
+                    //this._loadArtifactChildren(loadedArtifact);
+                } else {
+                    this.logger.log('_loadArtifact failure', oid, operation);
+                    var msg = Ext.String.format("Failed to load {0}/{1} with error: {2} ",artifact.get('_type'),artifact.get('ObjectID'),operation.error.errors.join(','));
+                    this.tree[oid].error = msg;
+                    this._checkForDoneness(msg);
+                }
+            }
+        });
+    },
+    getTreeNode: function(artifact){
+        return {record: artifact, error: null, childCount: {}};
+    },
+    _loadArtifactCollections: function(artifact){
+        var collectionFields = ['Predecessors','Tags'],
+            promises = [];
+
+        _.each(collectionFields, function(cf){
+            if (artifact.get(cf) && artifact.get(cf).Count && artifact.get(cf).Count > 0){
+                promises.push(this._loadCollection(artifact, cf, false, cf === 'Tags'));
+            }
+        }, this);
+
+        if (promises.length > 0){
+            Deft.Promise.all(promises).then({
+                success: function(){
+                    this.logger.log('artifact collections loaded', artifact);
+                    this._loadArtifactChildren(artifact)
+                },
+                failure: function(){},
+                scope: this
+            });
+        } else {
+            this._loadArtifactChildren(artifact);
+        }
+    },
+    _loadArtifactChildren: function(artifact){
+        if (this.stoppedByError){
+            return;
+        }
+
+        var childrenToLoad = this.parentChildTypeMap[artifact.get('_type').toLowerCase()],
+            collectionsLoading = 0;
+
+        childrenToLoad = _.filter(childrenToLoad, function(c){
+            if (!Ext.Array.contains(this.childTypesBlacklist, c.typePath)){
+                return true;
+            }
+        }, this);
+
+        this.logger.log('_loadArtifactChildren',childrenToLoad, this.parentChildTypeMap, artifact.get('_type').toLowerCase());
+        _.each(childrenToLoad, function(c){
+            this.logger.log('_loadArtifactChildren child',c, artifact.get(c.collectionName).Count);
+            if (artifact.get(c.collectionName).Count > 0){
+                this.totalRecords = this.totalRecords + artifact.get(c.collectionName).Count;
+                this._loadCollection(artifact, c.collectionName, true);
+            }
+        }, this);
+
+        if (collectionsLoading === 0){
+            this._checkForDoneness();
+        }
+    },
+    _checkForDoneness: function(errorMessage){
+        this.logger.log('_checkForDoneness', this.tree, this.totalRecords, _.keys(this.tree).length, errorMessage);
+        if (errorMessage){
+            this.stoppedByError = true;
+            this.fireEvent('error', errorMessage);
+            return;
+        }
+        if (this.tree && _.keys(this.tree).length === this.totalRecords){
+            this.logger.log('TREE LOADED!')
+            this.fireEvent('treeloaded', this);
+        }
+    },
+    _loadCollection: function(artifact, collectionName, loadRecord, preserveRefs){
+        var deferred = Ext.create('Deft.Deferred'),
+            parentOid = artifact.get('ObjectID');
+
+        this.tree[parentOid][collectionName] = [];
+
+        artifact.getCollection(collectionName).load({
+            fetch: ['ObjectID'],
+            callback: function(records, operation, success) {
+                this.logger.log('_loadCollection callback', collectionName, records, success);
+
+                if (success){
+                    _.each(records, function(r){
+                        var val = r.get('ObjectID');
+                        if (preserveRefs){
+                            val = r.get('_ref');
+                        }
+                        this.tree[parentOid][collectionName].push(val);
+                        if (loadRecord){
+                            this._loadModel(r);
+                        }
+                    }, this);
+                    deferred.resolve();
+                } else {
+                    var msg = Ext.String.format("Failed to load collecton for {0}/{1} with error: {2} ",artifact.get('_type'),artifact.get('ObjectID'),operation.error.errors.join(','));
+                    this.tree[parentOid].error = msg;
+                    this._checkForDoneness(msg);
+                    deferred.reject(msg);
+                }
+            },
+            scope: this
+        });
+
+        return deferred;
+    },
+    _fetchModel: function(type){
+        var deferred = Ext.create('Deft.Deferred');
+        if (this.modelHash[type]){
+            deferred.resolve(this.modelHash[type]);
+        } else {
+            Rally.data.ModelFactory.getModel({
+                type: type,
+                success: function(model){
+                    this.modelHash[type] = model;
+                    deferred.resolve(model);
+                },
+                failure: function(){
+                    var msg = 'Failed to load model: ' + type;
+                    this._checkForDoneness(msg);
+                    deferred.reject(msg);
+                },
+                scope: this
+            });
+        }
+        return deferred;
+    },
+    _setupParentChildMap: function(portfolioItemsByOrdinal){
+        var parentChildTypeMap = {
+            hierarchicalrequirement: [
+                {typePath: 'defect', collectionName: 'Defects', parentField: 'Requirement'},
+                {typePath: 'task', collectionName: 'Tasks', parentField: 'WorkProduct'},
+                {typePath: 'testcase', collectionName: 'TestCases', parentField: 'WorkProduct'},
+                {typePath: 'hierarchicalrequirement', collectionName: 'Children', parentField: 'Parent'}
+            ],
+            defect: [
+                {typePath: 'task', collectionName: 'Tasks', parentField: 'WorkProduct'},
+                {typePath: 'testcase', collectionName: 'TestCases', parentField: 'WorkProduct'}
+            ],
+            defectsuite: [
+                {typePath: 'defect', collectionName: 'Defects', parentField: 'DefectSuites'},
+                {typePath: 'task', collectionName: 'Tasks', parentField: 'WorkProduct'},
+                {typePath: 'testcase', collectionName: 'TestCases', parentField: 'WorkProduct'}
+            ],
+            testset: [
+                {typePath: 'task', collectionName: 'Tasks', parentField: 'WorkProduct'},
+                {typePath: 'testcase', collectionName: 'TestCases', parentField: 'TestSets'}
+            ]
+        };
+
+        if (portfolioItemsByOrdinal && portfolioItemsByOrdinal.length > 0){
+            parentChildTypeMap[portfolioItemsByOrdinal[0].toLowerCase()] = [{typePath: 'hierarchicalrequirement', collectionName: 'UserStories', parentField: 'PortfolioItem'}];
+
+            for (var i = 1; i<portfolioItemsByOrdinal.length ; i++){
+                parentChildTypeMap[portfolioItemsByOrdinal[i].toLowerCase()] = [{typePath: portfolioItemsByOrdinal[i-1], collectionName: 'Children', parentField: 'Parent'}];
+            }
+        }
+        return parentChildTypeMap;
+    },
+    _fetchGrandparent: function(parentObj){
+        var deferred = Ext.create('Deft.Deferred');
+
+        Ext.create('Rally.data.wsapi.Store',{
+            model: parentObj._type,
+            fetch: ['Parent','FormattedID'],
+            filters: [{
+                property: 'FormattedID',
+                value: parentObj.FormattedID
+            }]
+        }).load({
+            callback: function(records, operation){
+                if (operation.wasSuccessful()){
+                    deferred.resolve(records[0] && records[0].get('Parent') && records[0].get('Parent').FormattedID);
+                } else {
+                    deferred.reject('Error loading parent record: ' + operation.error.errors.join(','));
+                }
+            }
+        });
+
+        return deferred;
+    }
+});
+
+Ext.define('CA.technicalservices.BulkMenuItem.xWorkspaceCopyBase', {
+    alias: 'widget.bulkmenuitemxworkspacecopybase',
+    extend: 'Rally.ui.menu.bulk.MenuItem',
+
+    config: {
+
+        handler: function () {
+            this._showOptions();
+        }
+    },
+    _showOptions: function() {
+        var dlg = Ext.create('CA.technicalservices.xWorkspaceCopyDialog',{
+            title: "Select Destination Project",
+            workspaceSettings: this.workspaceSettings,
+            context: this.context
+        });
+        dlg.on('optionschosen', this._doAction, this);
+        dlg.show();
+    },
+    _doAction: function(options){
+
+        this._loadRecordsToCopy().then({
+            success: function(records){
+                this.totalCount = records.length;
+                this._copyRecords(records, options);
+            },
+            failure: function(errMsg){
+                this.onSuccess([],this.records,[errMsg]);
+            },
+            scope: this
+        });
+    },
+    _copyRecords: function(records, options){
+        var copier = Ext.create('CArABU.technicalservices.ArtifactCopier',{
+            workspaceSettings: this.workspaceSettings,
+            copyFields: this.copyFields,
+            context: this.context,
+            listeners: {
+                copyerror: function(msg){
+                    console.log('copyerror', msg);
+                    Rally.ui.notify.Notifier.showError({message: msg});
+                },
+                copystatus: function(msg){
+                    Rally.ui.notify.Notifier.show({message: msg});
+                    console.log('copystatus',msg);
+                },
+                copycomplete: function(){
+                    console.log('copycomplete',  records);
+                    this.onSuccess(records, [], []);
+                },
+                scope: this
+            }
+        });
+        copier.copyRecords(records, options.project);
+    },
+    onSuccess: function (successfulRecords, unsuccessfulRecords, errorMessages) {
+
+        var message = successfulRecords.length + (successfulRecords.length === 1 ? ' item has ' : ' items have ');
+        if(successfulRecords.length === this.totalCount) {
+            Rally.ui.notify.Notifier.show({
+                message: message +  'been created in the selected workspace and project.'
+            });
+        } else {
+            if (successfulRecords.length === 0){
+                message = "0 items have been created in the selected workspace and project."
+            }
+
+            Rally.ui.notify.Notifier.showWarning({
+                message: message + ', but ' + unsuccessfulRecords.length + ' failed: ' + errorMessages.join('<br/>'),
+                useHTML: true
+            });
+        }
+
+        Ext.callback(this.onActionComplete, null, [successfulRecords, unsuccessfulRecords]);
+    }
+});
+Ext.define('CA.technicalservices.BulkMenuItem.xWorkspaceDeepCopy', {
+    alias: 'widget.bulkmenuitemxworkspacedeepcopy',
+    extend: 'CA.technicalservices.BulkMenuItem.xWorkspaceCopyBase',
+
+    config: {
+
+        text: 'Deep Copy to Workspace...',
+
+        predicate: function (records) {
+            //TODO: Make sure that all children are valid to copy
+            var linkField = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspaceLinkField(),
+                copiedTypes = _.map(this.typesToCopy, function(t){ return t.toLowerCase(); });
+
+            return _.every(records, function (record) {
+                var type = record.get('_type').toLowerCase();
+
+                if (Ext.Array.contains(copiedTypes, type)){
+                    return !record.get(linkField);
+                }
+                return false;
+            });
+        }
+    },
+
+    _loadRecordsToCopy: function(options){
+        var deferred = Ext.create('Deft.Deferred'),
+            loader = Ext.create('CArABU.technicalservices.ArtifactLoader',{
+                portfolioItemTypes: CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspacePortfolioItemTypes(),
+                copyFields: this.copyFields,
+                listeners: {
+                    loaderror: function(error){
+                        deferred.reject(error);
+                    },
+                    loadcomplete: function(records){
+                        deferred.resolve(records);
+                    }
+                }
+            });
+
+        loader.loadHierarchy(this.records);
+        return deferred;
+    }
+
+});
+Ext.define('CA.technicalservices.BulkMenuItem.xWorkspaceCopy', {
+    alias: 'widget.bulkmenuitemxworkspacecopy',
+    extend: 'CA.technicalservices.BulkMenuItem.xWorkspaceCopyBase',
+
+    config: {
+        text: 'Copy to Workspace...',
+
+        predicate: function (records) {
+            //TODO: Make sure that all children are valid to copy
+            var linkField = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspaceLinkField(),
+                copiedTypes = _.map(this.typesToCopy, function(t){ return t.toLowerCase(); });
+
+            return _.every(records, function (record) {
+                var type = record.get('_type').toLowerCase();
+                console.log('type', type, copiedTypes, record.get(linkField));
+                if (Ext.Array.contains(copiedTypes, type)){
+                    return !record.get(linkField);
+                }
+                return false;
+            });
+        }
+    },
+
+    _loadRecordsToCopy: function(){
+
+        var deferred = Ext.create('Deft.Deferred'),
+            loader = Ext.create('CArABU.technicalservices.ArtifactLoader',{
+                copyFields: this.copyFields,
+                listeners: {
+                    loaderror: function(error){
+                        deferred.reject(error);
+                    },
+                    loadcomplete: function(records){
+                        deferred.resolve(records);
+                    }
+                }
+            });
+
+        loader.load(this.records);
+        return deferred;
+    }
+});
+Ext.define('CrossWorkspaceCopier.Settings',{
+    singleton: true,
+
+
+
+    getFields: function(workspaceSettings){
+        console.log('workspaceSettings', workspaceSettings)
+        return [{
+            name: 'link_field',
+            xtype: 'rallyfieldcombobox',
+            fieldLabel: 'Link Field',
+            model: 'UserStory',
+            labelWidth: 200,
+            labelAlign: 'right',
+            minValue: 0,
+            _isNotHidden: function(field) {
+                var attribute = field.attributeDefinition;
+                if ( field.readOnly == true ) {
+                    return false;
+                }
+
+                if ( attribute ) {
+                    if ( attribute.Constrained == true) {
+                        return false;
+                    }
+
+                    if ( attribute.AttributeType == "STRING" ) {
+                        //console.log(field.name,attribute.AttributeType,field);
+                        return true;
+                    }
+                }
+                return false;
+            }
+        },{
+            xtype: 'workspacesettingsform',
+            name: 'workspaceSettings',
+            workspaceSettings: workspaceSettings,
+            fieldLabel: 'Configure workspaces available for copy and mappings',
+            labelAlign: 'top',
+            margin: '25 0 300 0',
+
+          //  readyEvent: 'ready'
+        }];
+    }
+});
+
+Ext.define('CArABU.technicalservices.WorkspaceConfigurationDialog', {
+    extend: 'Rally.ui.dialog.Dialog',
+    alias: 'widget.workspaceconfigdialog',
+
+    height: 400,
+    width: 600,
+    layout: 'fit',
+    closable: true,
+    draggable: true,
+
+    config: {
+        /**
+         * @cfg {String}
+         * Title to give to the dialog
+         */
+        title: 'Choose an Item',
+
+        /**
+         * @cfg {Boolean}
+         * Allow multiple selection or not
+         */
+        multiple: true,
+
+        /**
+         * @cfg {Object}
+         * An {Ext.data.Store} config object used when building the grid
+         * Handy when you need to limit the selection with store filters
+         */
+        storeConfig: {
+            context: {
+                project: null
+            },
+            sorters: [
+                {
+                    property: 'FormattedID',
+                    direction: 'DESC'
+                }
+            ]
+        },
+
+        /**
+         * @cfg {Ext.grid.Column}
+         * List of columns that will be used in the chooser
+         */
+        columns: [
+            {
+                text: 'ID',
+                dataIndex: 'ObjectID',
+                renderer: _.identity
+            },
+            'Name'
+        ],
+
+        /**
+         * @cfg {String}
+         * Text to be displayed on the button when selection is complete
+         */
+        selectionButtonText: 'Done',
+
+        /**
+         * @cfg {Object}
+         * The grid configuration to be used when creative the grid of items in the dialog
+         */
+        gridConfig: {},
+
+        /**
+         * @deprecated
+         * @cfg {String}
+         * The ref of a record to select when the chooser loads
+         * Use selectedRecords instead
+         */
+        selectedRef: undefined,
+
+        /**
+         * @cfg {String}|{String[]}
+         * The ref(s) of items which should be selected when the chooser loads
+         */
+        selectedRecords: undefined,
+
+        /**
+         * @cfg {Array}
+         * The records to select when the chooser loads
+         */
+        initialSelectedRecords: undefined,
+
+        /**
+         * @private
+         * @cfg userAction {String} (Optional)
+         * The client metrics action to record when the user makes a selection and clicks done
+         */
+
+        /**
+         * @cfg showRadioButtons {Boolean}
+         */
+        showRadioButtons: true,
+
+        introText:  "Please select a workspace, Link Field and appropriate mappings for each mapping type in the selected workspace.",
+
+    },
+    constructor: function(config) {
+
+        this.workspaces = config.workspaces;
+        this.workspaceConfig = config.workspaceConfig || {};
+
+        if (config.selectedWorkspaceStore){
+            this.selectedWorkspaceStore = config.selectedWorkspaceStore
+        }
+
+        this.mergeConfig(config);
+        this.callParent([this.config]);
+    },
+
+    initComponent: function() {
+        this.callParent(arguments);
+
+        this.addEvents(
+            /**
+             * @event artifactchosen
+             * Fires when user clicks done after choosing an artifact
+             * @param {Rally.ui.dialog.ArtifactChooserDialog} source the dialog
+             * @param {Rally.data.wsapi.Model}| {Rally.data.wsapi.Model[]} selection selected record or an array of selected records if multiple is true
+             */
+            'saveconfiguration'
+        );
+
+        this.addCls(['chooserDialog', 'chooser-dialog']);
+    },
+
+    destroy: function() {
+        //      this._destroyTooltip();
+        this.callParent(arguments);
+    },
+    /**
+     * getConfiguration
+     * returns the configuration currently in the dialog
+     */
+    getConfiguration: function(){
+       return {};
+    },
+    beforeRender: function() {
+        this.callParent(arguments);
+
+        this.addDocked({
+            xtype: 'toolbar',
+            dock: 'bottom',
+            padding: '0 0 10 0',
+            layout: {
+                type: 'hbox',
+                pack: 'center'
+            },
+            ui: 'footer',
+            items: [
+                {
+                    xtype: 'rallybutton',
+                    itemId: 'doneButton',
+                    text: this.selectionButtonText,
+                    cls: 'primary rly-small',
+                    scope: this,
+                    disabled: false,
+                    userAction: 'clicked done in dialog',
+                    handler: this._done
+                },
+                {
+                    xtype: 'rallybutton',
+                    text: 'Cancel',
+                    cls: 'secondary rly-small',
+                    handler: this.close,
+                    scope: this,
+                    ui: 'link'
+                }
+            ]
+        });
+
+        if (this.introText) {
+            this.addDocked({
+                xtype: 'component',
+                itemId: 'intro-text',
+                componentCls: 'intro-panel',
+                html: this.introText
+            });
+        }
+
+        this.addDocked({
+            xtype: 'toolbar',
+            itemId: 'workspaceSelector',
+            dock: 'top',
+            layout: 'vbox',
+            border: false,
+            padding: '0 0 10px 0',
+            items: this.getWorkspaceSelectorItems()
+        });
+
+        if (this.selectedWorkspaceStore){
+            CArABU.technicalservices.WorkspaceSettingsUtility.initializeWorkspaceConfiguration(this.selectedWorkspaceStore).then({
+                success: this._initializeDialog,
+                failure: this._initializeDialogWithError,
+                scope: this
+            });
+        }
+    },
+    _done: function(){
+        var linkField = this.down('#cb-linkField') && this.down('#cb-linkField').getValue(),
+            intro = this.down('#intro-text');
+
+        this._saveMappings();
+
+        this.selectedWorkspaceStore.linkField = linkField;
+
+        var validationErrors = CArABU.technicalservices.WorkspaceSettingsUtility.validateSetting(this.selectedWorkspaceStore,this._getTotalPortfolioItemLevels());
+     //  var validationErrors = this.selectedWorkspaceStore.validateConfiguration(this._getTotalPortfolioItemLevels());
+        if (validationErrors && validationErrors.length > 0){
+            intro.update('<div class="warning">' + validationErrors.join('<br/>') + '</div>');
+            return;
+        }
+        this.fireEvent('saveconfiguration', this.selectedWorkspaceStore);
+        this.close();
+    },
+    /**
+     * Get the records currently selected in the dialog
+     * {Rally.data.Model}|{Rally.data.Model[]}
+     */
+    getSelectedRecords: function() {
+        return this.multiple ? this.selectionCache : this.selectionCache[0];
+    },
+
+    getWorkspaceSelectorItems: function() {
+        var width = 300,
+            disabled = this.selectedWorkspaceStore && this.selectedWorkspaceStore.ObjectID > 0,
+            linkValue = this.selectedWorkspaceStore && this.selectedWorkspaceStore.linkField || null;
+
+        var items = [{
+            xtype: 'rallycombobox',
+            itemId: 'cb-linkField',
+            fieldLabel: 'Link Field',
+            labelAlign: 'right',
+            width: width,
+            store: Ext.create('Rally.data.custom.Store',[]),
+            displayField: 'displayName',
+            valueField: 'name',
+            value: linkValue,
+            allowNoEntry: false,
+            disabled: true
+        }];
+
+        if (disabled){
+            items.unshift({
+                xtype: 'rallytextfield',
+                disabled: true,
+                fieldLabel: 'Workspace',
+                labelAlign: 'right',
+                value: this.selectedWorkspaceStore.Name,
+                width: width
+            });
+        } else {
+            items.unshift({
+                xtype:'rallycombobox',
+                itemId: 'cb-workspace',
+                fieldLabel: 'Workspace',
+                labelAlign: 'right',
+                store: Ext.create('Rally.data.custom.Store',{ data: this.workspaces }),
+                displayField: 'Name',
+                valueField: 'ObjectID',
+                allowNoEntry: true,
+                noEntryText: 'Select a Workspace...',
+                width: width,
+                listeners: {
+                scope: this,
+                    select: this._initializeWorkspace,
+                    ready: this._initializeWorkspace
+            }
+            });
+        }
+
+        return items;
+
+    },
+    _initializeWorkspace: function(cb){
+        if (cb && cb.getRecord() && cb.getRecord().get('ObjectID') > 0){
+            var workspaceRef = cb.getRecord().get('_ref'),
+                workspaceOid = cb.getRecord().get('ObjectID'),
+                workspaceName = cb.getRecord().get('Name');
+
+            if (CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash[workspaceOid]){
+                this._initializeDialog(CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash[workspaceOid]);
+            } else {
+                CArABU.technicalservices.WorkspaceSettingsUtility.initializeWorkspaceConfiguration({
+                    _ref: workspaceRef,
+                    Name: workspaceName,
+                    ObjectID: workspaceOid
+                }).then({
+                    success: this._initializeDialog,
+                    failure: this._initializeDialogWithError,
+                    scope: this
+                });
+            }
+        } else {
+            this.down('#cb-linkField').bindStore(null);
+            this.down('#cb-linkField').setDisabled(true);
+        }
+    },
+    _initializeDialog: function(otherWorkspaceStore){
+        this.selectedWorkspaceStore = otherWorkspaceStore || null;
+        if (this.selectedWorkspaceStore){
+            this._updateLinkFieldSelector(this.selectedWorkspaceStore);
+            this._buildMappingGrid(this.selectedWorkspaceStore);
+        }
+    },
+    _initializeDialogWithError: function(errorMsg){
+
+    },
+    _getTotalPortfolioItemLevels: function(){
+
+        if (this.selectedWorkspaceStore){
+            return Math.min(
+                CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspacePortfolioItemTypes().length,
+                this.selectedWorkspaceStore.portfolioItemTypes.length);
+        }
+        return CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspacePortfolioItemTypes().length;
+    },
+    _updateLinkFieldSelector: function(otherWorkspaceStore){
+        var store = Ext.create('Rally.data.custom.Store',{
+            data: CArABU.technicalservices.WorkspaceSettingsUtility.getValidLinkFields(otherWorkspaceStore)
+        });
+        this.down('#cb-linkField').bindStore(store);
+        this.down('#cb-linkField').setDisabled(false);
+        if (this.selectedWorkspaceStore.linkField){
+            this.down('#cb-linkField').setValue(this.selectedWorkspaceStore.linkField);
+        }
+    },
+
+    _saveMappings: function(){
+        var otherWorkspace = this.selectedWorkspaceStore,
+            grid = this.down('rallygrid');
+
+        if (grid && otherWorkspace){
+            var mappings = otherWorkspace.mappings || {};
+
+            Ext.Array.each(grid.getStore().getRange(), function(r){
+
+                var mappedType = r.get('type'),
+                    mappedField = 'State',
+                    mapFromValue = r.get('mapFrom'),
+                    mapToName = r.get('mapTo'),
+                    mapToValue = null;
+
+                if (_.has(otherWorkspace.portfolioItemStates[mappedType], mapToName)){
+                    mapToValue = mapToName;
+                }
+
+                mappedType = mappedType.toLowerCase();
+                mappings[mappedType] = mappings[mappedType] || {};
+                mappings[mappedType][mappedField] = mappings[mappedType][mappedField] || {};
+                mappings[mappedType][mappedField][mapFromValue] = mapToValue;
+
+            }, this);
+            otherWorkspace.mappings = mappings;
+        }
+    },
+
+    _buildMappingGrid: function(){
+        var currentWorkspace = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspace(),
+            otherWorkspace = this.selectedWorkspaceStore,
+            totalPortfolioLevels = this._getTotalPortfolioItemLevels();
+
+        var data = [];
+        for (var i=0; i < totalPortfolioLevels; i++){
+            var type = currentWorkspace.portfolioItemTypes[i].toLowerCase();
+
+            Ext.Object.each(currentWorkspace.portfolioItemStates[type], function(stateName, ref){
+
+                if (stateName) {
+                    var mappedStateName = otherWorkspace.mappings &&
+                        otherWorkspace.mappings[type] &&
+                        otherWorkspace.mappings[type]['State'] &&
+                        otherWorkspace.mappings[type]['State'][stateName] || "";
+
+                    data.push({
+                        type: type,
+                        mapFrom: stateName,
+                        mapTo: mappedStateName
+                    });
+                }
+            }, this);
+        }
+
+        this.add({
+            xtype: 'rallygrid',
+            store: Ext.create('Rally.data.custom.Store',{
+                data: data
+            }),
+            showRowActionsColumn: false,
+            showPagingToolbar: false,
+            columnCfgs: this._getMappingGridColumnCfgs( this._getPortfolioStateOptions(otherWorkspace))
+        });
+    },
+    _getPortfolioStateOptions: function(otherWorkspace){
+        var data = [];
+        Ext.Object.each(otherWorkspace.portfolioItemStates, function(type, states){
+            Ext.Object.each(states, function(stateName, stateRef){
+                if (stateName  && !Ext.Array.contains(data, stateName)){
+                    data.push(stateName);
+                }
+            });
+        });
+        return _.map(data, function(r){
+            return {_refObjectName: r};
+        });
+    },
+    _getMappingGridColumnCfgs: function(mapToStateOptions){
+
+        return [{
+            dataIndex: 'type',
+            text: 'type',
+            renderer: function(v){
+                var string = v.replace('portfolioitem/','');
+                return string.charAt(0).toUpperCase() + string.slice(1);
+            }
+        },{
+            dataIndex: 'mapFrom',
+            text: 'Map From'
+        },{
+            dataIndex: 'mapTo',
+            text: 'Map To',
+            editor: {
+                    xtype: 'rallycombobox',
+                    allowNoEntry: true,
+                    store: Ext.create('Rally.data.custom.Store',{
+                        data: mapToStateOptions
+                    }),
+                    valueField: '_refObjectName',
+                    displayField: '_refObjectName'
+                }
+        }];
+    }
+});
+
+Ext.define('CA.technicalservices.xWorkspaceCopyDialog',{
+    extend: 'Rally.ui.dialog.Dialog',
+
+    height: 400,
+    width: 600,
+    layout: 'fit',
+    closable: true,
+    draggable: true,
+
+
+    constructor: function(config) {
+        this.mergeConfig(config);
+
+        this.callParent([this.config]);
+    },
+    initComponent: function() {
+        this.callParent(arguments);
+
+        this.addEvents(
+            /**
+             * @event optionschosen
+             * Fires when user clicks done after choosing a project and other options
+             * @param {Rally.ui.dialog.ArtifactChooserDialog} source the dialog
+             * @param {Rally.data.wsapi.Model}| {Rally.data.wsapi.Model[]} selection selected record or an array of selected records if multiple is true
+             */
+            'optionschosen'
+        );
+
+    },
+    getOptions: function(){
+        return {};
+    },
+    beforeRender: function() {
+        this.callParent(arguments);
+
+        this.selectedProject = null;
+
+        this.addDocked({
+            xtype: 'toolbar',
+            dock: 'bottom',
+            padding: '0 0 10 0',
+            layout: {
+                type: 'hbox',
+                pack: 'center'
+            },
+            ui: 'footer',
+            items: [
+                {
+                    xtype: 'rallybutton',
+                    cls: 'primary rly-small',
+                    disabled: true,
+                    handler: function() {
+                        this.fireEvent('optionschosen', this.getOptions());
+                        this.close();
+                    },
+                    itemId: 'doneButton',
+                    scope: this,
+                    text: "Done",
+                    userAction: 'clicked done item in dialog'
+                },
+                {
+                    xtype: 'rallybutton',
+                    text: 'Cancel',
+                    cls: 'secondary rly-small',
+                    handler: this.close,
+                    scope: this,
+                    ui: 'link'
+                }
+            ]
+        });
+
+        if (this.introText) {
+            this.addDocked({
+                xtype: 'component',
+                componentCls: 'intro-panel',
+                html: this.introText,
+                dock: 'top'
+            });
+        }
+
+        //TODO only show workspaces that can copy all the record types selected.
+        var workspaces = CArABU.technicalservices.WorkspaceSettingsUtility.getDestinationWorkspaceConfigurations();
+
+        var filters = _.map(workspaces, function(w){ return { property: "ObjectID", value: w.ObjectID}; });
+        filters = Rally.data.wsapi.Filter.or(filters);
+        filters = filters.and({
+            property: 'State',
+            value: 'Open'
+        });
+        filters = filters.and({
+            property: 'Projects.State',
+            value: 'Open'
+        });
+
+        var pt = this.add({
+            xtype: 'rallyprojecttree',
+            itemId: 'prjTree',
+            border: false,
+            autoScroll: true,
+            topLevelStoreConfig: {
+                fetch: ['Name', 'State'],
+                filters: filters,
+                sorters: [{
+                    property: 'Name',
+                    direction: 'ASC'
+                }],
+                context: {
+                    workspace: 'null',
+                    project: undefined
+                }
+            }
+        });
+        pt.on('itemselected', this.projectSelected, this);
+
+        this.add({
+            xtype: 'rallycheckboxfield',
+            itemId: 'optionsCopyHierarchy',
+            fieldLabel: 'Copy Entire Hierarchy'
+        });
+
+    },
+    projectSelected: function(treeItem){
+        this.selectedProject = treeItem && treeItem.getRecord() || null;
+        this.down('#doneButton').setDisabled(this.selectedProject === null);
+    },
+    getOptions: function(){
+        var copyHierarchy = this.down('#optionsCopyHierarchy') && this.down('#optionsCopyHierarchy').getValue() || false;
+        return {
+            project: this.selectedProject,
+            copyHierarchy: copyHierarchy || false,
+            records: this.records
+        };
+    }
+
+
+});
+Ext.define('CArABU.technicalservices.WorkspaceSettingsUtility',{
+    singleton: true,
+
+    syncFields: {
+        hierarchicalrequirement: ['Name','Description','ScheduleState'],
+        task: ['Name','Description','State'],
+        portfolioitem: ['Name','State','Description','PlannedStartDate','PlannedEndDate']
+    },
+    syncFetchFields: ['LastUpdateDate','Workspace','ObjectID','FormattedID'],
+    copyFields: ['ObjectID','Name','ScheduleState','Description','PlanEstimate','State','PlannedStartDate','PlannedEndDate'],
+
+    context: null,
+    workspaceSettingsHash: null,
+
+
+    initializeWorkspaceConfiguration: function(workspaceSettingsObject){
+        var deferred = Ext.create('Deft.Deferred');
+
+        Deft.Chain.pipeline([
+            function(){ return CArABU.technicalservices.WorkspaceSettingsUtility.fetchModels(workspaceSettingsObject); },
+            CArABU.technicalservices.WorkspaceSettingsUtility.fetchStateAllowedValues
+        ]).then({
+            success: function(workspaceSettingsObject){
+                deferred.resolve(workspaceSettingsObject);
+            },
+            failure: function(msg){
+                deferred.reject(msg);
+            }
+        });
+        return deferred;
+
+    },
+    fetchModels: function(workspaceConfiguration){
+        var deferred = Ext.create('Deft.Deferred');
+
+        var workspaceRef = workspaceConfiguration._ref,
+            context = { workspace: workspaceRef, project: null },
+            models = ['UserStory','Task'];
+
+        CArABU.technicalservices.WsapiToolbox.fetchPortfolioItemTypes(context).then({
+            success: function(portfolioItemTypes){
+                var portfolioItemModels = _.map(portfolioItemTypes, function(p){
+                    return p.get('TypePath');
+                });
+                workspaceConfiguration.portfolioItemTypes = portfolioItemModels;
+
+                models = models.concat(portfolioItemModels);
+                Rally.data.ModelFactory.getModels({
+                    types: models,
+                    context: context,
+                    success: function(models){
+                        workspaceConfiguration.models = models;
+                        deferred.resolve(workspaceConfiguration);
+                    },
+                    failure: function(errorMsg){
+                        deferred.reject(errorMsg);
+                    },
+                    scope: this
+                });
+            },
+            failure: function(errorMsg){
+                deferred.reject(errorMsg);
+            },
+            scope: this
+        });
+        return deferred;
+    },
+    fetchStateAllowedValues: function(workspaceConfiguration){
+        var deferred = Ext.create('Deft.Deferred'),
+            promises = [];
+
+        Ext.Array.each(workspaceConfiguration.portfolioItemTypes, function(m){
+            promises.push(CArABU.technicalservices.WsapiToolbox.fetchAllowedValues(workspaceConfiguration.models[m],'State'));
+        }, this);
+
+        workspaceConfiguration.portfolioItemStates = {};
+        Deft.Promise.all(promises).then({
+            success: function(results){
+                for (var i=0; i<workspaceConfiguration.portfolioItemTypes.length; i++){
+                    workspaceConfiguration.portfolioItemStates[workspaceConfiguration.portfolioItemTypes[i].toLowerCase()] = {};
+                    Ext.Array.each(results[i], function(r){
+                        workspaceConfiguration.portfolioItemStates[workspaceConfiguration.portfolioItemTypes[i].toLowerCase()][r.get('StringValue')] = r.get('_ref');
+                    });
+                }
+                deferred.resolve(workspaceConfiguration);
+            },
+            failure: function(msg){
+                deferred.reject(msg);
+            },
+            scope: this
+        });
+        return deferred;
+    },
+    getSettingsDataFields: function(){
+        return ['ObjectID','Name','linkField','mappings'];
+    },
+    getDestinationWorkspaceConfigurations: function(){
+        var workspaceSettingsHash = CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash,
+            currentWorkspaceID = CArABU.technicalservices.WorkspaceSettingsUtility.context.getWorkspace().ObjectID;
+        var workspaces = [];
+
+        Ext.Object.each(workspaceSettingsHash, function(wOid, w){
+            if (Number(wOid) !== Number(currentWorkspaceID)){
+                workspaces.push(w);
+            }
+        });
+        return workspaces;
+    },
+    initializeWorkspaceSettingsHash: function(encodedWorkspaceSettings, context, currentWorkspaceLinkField){
+        var workspaceSettingsHash = {},
+            promises = [],
+            deferred = Ext.create('Deft.Deferred');
+
+        if (encodedWorkspaceSettings && !_.isEmpty(encodedWorkspaceSettings)){
+            if (Ext.isString(encodedWorkspaceSettings)){
+                workspaceSettingsHash = Ext.JSON.decode(encodedWorkspaceSettings);
+            } else {
+                workspaceSettingsHash = Ext.clone(encodedWorkspaceSettings);
+            }
+        }
+
+        workspaceSettingsHash[context.getWorkspace().ObjectID] = {
+            _ref: context.getWorkspace()._ref,
+            ObjectID: context.getWorkspace().ObjectID,
+            Name: context.getWorkspace().Name,
+            linkField: currentWorkspaceLinkField
+        };
+
+        Ext.Object.each(workspaceSettingsHash, function(workspaceOid, settingsObject){
+            promises.push(CArABU.technicalservices.WorkspaceSettingsUtility.initializeWorkspaceConfiguration(settingsObject));
+        });
+
+        Deft.Promise.all(promises).then({
+            success: function(results){
+                CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash = workspaceSettingsHash;
+                deferred.resolve(workspaceSettingsHash);
+            },
+            failure: function(msg){
+                deferred.reject(msg);
+            },
+            scope: this
+        });
+        return deferred;
+
+    },
+    getCopyableTypes: function(type){
+        var piTypes = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspacePortfolioItemTypes(),
+            types = [];
+
+        var maxPILevels = 0;
+        Ext.Array.each(CArABU.technicalservices.WorkspaceSettingsUtility.getDestinationWorkspaceConfigurations(), function(w){
+            maxPILevels = Math.max(w.portfolioItemTypes.length, maxPILevels);
+        });
+        maxPILevels = Math.min(maxPILevels, piTypes.length);
+
+        for (var i=0; i<maxPILevels; i++){
+            types.push(piTypes[i]);
+            if (piTypes[i].toLowerCase === type.toLowerCase()){
+                i = piTypes.length;
+            }
+        }
+
+        types = types.concat(['hierarchicalrequirement','task']);
+        return types;
+    },
+    getCurrentWorkspace: function(){
+        var workspaceId = CArABU.technicalservices.WorkspaceSettingsUtility.context.getWorkspace().ObjectID;
+        return CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash[workspaceId];
+    },
+    getCurrentWorkspacePortfolioItemTypes: function(){
+      return CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspace().portfolioItemTypes;
+    },
+    getLinkField: function(workspaceID){
+        return CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash[workspaceID] &&
+            CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash[workspaceID].linkField;
+    },
+    getCurrentWorkspaceLinkField: function(){
+        return CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspace().linkField;
+    },
+    getArtifactModelNames: function(){
+        return this.getCurrentWorkspacePortfolioItemTypes().concat(['HierarchicalRequirement','Task']);
+    },
+    getSettingsDataFields: function(){
+        return ['ObjectID','Name','linkField','mappings','portfolioItemTypes','portfolioItemStates','models','_ref'];
+    },
+    validateSetting: function(record, maxPortfolioLevels){
+        var errors = [];
+
+        maxPortfolioLevels = maxPortfolioLevels || CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspacePortfolioItemTypes().length;
+
+        if (!record.linkField){
+            errors.push("Please select a link field.");
+        }
+        for (var i=0; i<maxPortfolioLevels; i++){
+            var mappings = record.mappings && record.mappings[record.portfolioItemTypes[i].toLowerCase()];
+            if (!mappings){
+                errors.push("Please provide mappings for " + record.portfolioItemTypes[i]);
+            } else {
+                Ext.Object.each(mappings, function(field, fieldMapping){
+                    Ext.Object.each(fieldMapping, function(mapFrom, mapTo){
+                        if (!mapTo || mapTo.length === 0){
+                            errors.push("Please select a mapping for " + field + " value " + mapFrom);
+                        }
+                    });
+                });
+            }
+        }
+        return errors;
+    },
+    getValidLinkFields: function(workspace){
+        //Find the custom string field on each model that can be the link field.
+        var validFields = [];
+        Ext.Object.each(workspace.models, function(key, m){
+            var fields = [];
+            Ext.Array.each(m.getFields(), function(f){
+                if (f.custom && f.attributeDefinition
+                    && f.attributeDefinition.AttributeType === 'STRING'
+                    && !f.readOnly){
+                    fields.push(f.name);
+                }
+            });
+            if (validFields.length === 0){
+                validFields = fields;
+            }
+            validFields = _.intersection(fields, validFields);
+        });
+
+        var validFieldObjects = [];
+        Ext.Array.each(validFields, function(f){
+            validFieldObjects.push(workspace.models['UserStory'].getField(f));
+        }, this);
+
+        return validFieldObjects
+    },
+
+    getValueMap: function(workspaceRef, type, field){
+
+        var workspaceID = Rally.util.Ref.getOidFromRef(workspaceRef),
+            wksp = CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash[workspaceID];
+        return wksp.mappings && wksp.mappings[type.toLowerCase()] && wksp.mappings[type.toLowerCase()][field] || null;
+    },
+    getCurrentProjectName: function(){
+        return CArABU.technicalservices.WorkspaceSettingsUtility.context.getProject().Name;
+    },
+    getCurrentWorkspaceName: function(){
+        return CArABU.technicalservices.WorkspaceSettingsUtility.context.getWorkspace().Name;
+    },
+    getWorkspaceForProject: function(projectID){
+        var workspaceID = null;
+        Ext.Object.each(this.workspaceStores, function(wOid, w){
+            if (w.projectIDs && Ext.Array.contains(w.projectIDs, Number(projectID))){
+                workspaceID = w.ObjectID;
+                return false;
+            }
+        });
+        return workspaceID;
+    },
+    getRefMap: function(workspaceRef, type, fieldName){
+        var oid = Rally.util.Ref.getOidFromRef(workspaceRef),
+            workspace = CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash[oid];
+
+        //TODO: make this smarter and more generic if we add other mapping fields
+        if (/portfolioitem/.test(type.toLowerCase()) && fieldName === "State"){
+            return workspace.portfolioItemStates;
+        }
+        return null;
+    },
+    getMappedValue: function(sourceRecord, fieldName, destWorkspaceRef){
+        var sourceType = sourceRecord.get('_type').toLowerCase(),
+            sourceValue = sourceRecord.get(fieldName),
+            sourceWorkspaceRef = sourceRecord.get('Workspace')._ref;
+
+        if (Ext.isObject(sourceValue)){
+            sourceValue = sourceValue._refObjectName;
+        }
+
+        if (!sourceValue){
+            return null;
+        }
+
+            var valueMap = null,
+                fromCurrent = true;
+            if (CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspace().ObjectID === Rally.util.Ref.getOidFromRef(destWorkspaceRef)){
+                fromCurrent = false;
+                valueMap = CArABU.technicalservices.WorkspaceSettingsUtility.getValueMap(sourceWorkspaceRef, sourceType, fieldName);
+            } else {
+                valueMap = CArABU.technicalservices.WorkspaceSettingsUtility.getValueMap(destWorkspaceRef, sourceType, fieldName);
+            }
+
+        if (!valueMap){
+            return sourceValue;
+        }
+
+        //valueMap is currentWorkspaceValue => otherWorkspaceValue
+        var newVal = null;
+
+        if (fromCurrent){
+            newVal = valueMap[sourceValue] || null;
+        } else {
+            Ext.Object.each(valueMap, function(currentVal, otherVal){
+                if (otherVal === sourceValue){
+                    newVal = currentVal;
+                }
+            });
+        }
+
+        var refMap = CArABU.technicalservices.WorkspaceSettingsUtility.getRefMap(destWorkspaceRef, sourceType, fieldName);
+        if (refMap){
+            return refMap[sourceType] && refMap[sourceType][newVal] || null;
+        }
+
+        return newVal;
+
+    },
+    getSyncFields: function(type){
+        type = type.toLowerCase();
+        if (/^portfolioitem/.test(type.toLowerCase())){
+            type = "portfolioitem";
+        }
+        return CArABU.technicalservices.WorkspaceSettingsUtility.syncFields[type] || [];
+    },
+    getLinkValue: function(artifact, workspaceName, projectName){
+        var link_text = Ext.String.format('[{0}][{1}] {2}',workspaceName, projectName, artifact.get('FormattedID'));
+
+        return Rally.nav.DetailLink.getLink({
+            record: artifact,
+            text: link_text
+        });
+    },
+    parseLinkValue: function(linkValue){
+       var matches = /<a.*href=".*\/#\/(\d+).*\/detail\/.*\/(\d+)">(.*)<\/a>/.exec(linkValue),
+           obj = {};
+
+        if (matches){
+            obj.objectID = matches[2] || null;
+            obj.projectOid =matches[1] || null;
+            obj.linkText = matches[3];
+
+        }
+        return obj;
+    },
+    getObjectIDFromLinkValue: function(linkValue){
+        var obj = CArABU.technicalservices.WorkspaceSettingsUtility.parseLinkValue(linkValue);
+        return obj.objectID || null;
+    },
+    getContextFromLinkValue: function(linkValue){
+        var obj = CArABU.technicalservices.WorkspaceSettingsUtility.parseLinkValue(linkValue);
+
+        if (obj.projectOid && obj.linkText){
+            var linkTextMatches = /\[(.*)\]\[(.*)\].*/.exec(obj.linkText),
+                workspaceOid = null;
+
+            if (linkTextMatches && linkTextMatches[1]){
+                var workspaceName = linkTextMatches[1];
+                Ext.Object.each(CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash, function(oid, obj){
+                    if (obj.Name === workspaceName){
+                        workspaceOid = obj._ref;
+                        return false;
+                    }
+                });
+            }
+            return {workspace: workspaceOid, project: "/project/" + obj.projectOid};
+        }
+        return null;
+    },
+    getDestinationModelType: function(sourceType, destinationContext){
+
+        if (/portfolioitem/.test(sourceType.toLowerCase())){
+            //This is a portfolio item
+            var ordinal = -1;
+            for (var i=0; i < CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspace().portfolioItemTypes.length; i++){
+                if (sourceType.toLowerCase() === CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspace().portfolioItemTypes[i].toLowerCase()){
+                    ordinal = i;
+                }
+            }
+
+            var workspaceOid = Rally.util.Ref.getOidFromRef(destinationContext.workspace);
+            var destType= CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash[workspaceOid].portfolioItemTypes[ordinal] || sourceType;
+            return destType;
+        }
+        return sourceType;
+
+    }
+});
+
+Ext.define('CArABU.technicalservices.WorkspaceSettingsForm',{
+    extend: 'Ext.form.field.Base',
+    alias: 'widget.workspacesettingsform',
+    fieldSubTpl: '<div id="{id}" class="settings-grid"></div>',
+    width: '100%',
+    cls: 'column-settings',
+
+    store: undefined,
+    mixins: {
+        observable: 'Ext.util.Observable'
+    },
+    constructor: function(config){
+        this.mixins.observable.constructor.call(this, config);
+        this.callParent(arguments);
+    },
+    onDestroy: function() {
+        if (this._grid) {
+            this._grid.destroy();
+            delete this._grid;
+        }
+        this.callParent(arguments);
+    },
+    initComponent: function(){
+        this.callParent();
+        this.addEvents('ready');
+
+        if (this.rendered){
+            this._buildWorkspaceGrid()
+        } else {
+            this.on('render', this._buildWorkspaceGrid, this);
+        }
+    },
+    _buildWorkspaceGrid: function(records, operation, success){
+
+        var data = [],
+            empty_text = "No destination workspaces configured.";
+
+
+        var decodedValue = {};
+        console.log('this.value', this.value);
+        if (this.value && !_.isEmpty(this.value)){
+            decodedValue = Ext.JSON.decode(this.value);
+        }
+        Ext.Object.each(decodedValue, function(key, wk){
+            data.push(wk);
+        });
+
+        var custom_store = Ext.create('Ext.data.Store', {
+            fields: CArABU.technicalservices.WorkspaceSettingsUtility.getSettingsDataFields(),
+            data: data
+        });
+
+        this._grid = Ext.create('Rally.ui.grid.Grid', {
+            autoWidth: true,
+            renderTo: this.inputEl,
+            columnCfgs: this._getColumnCfgs(),
+            showRowActionsColumn: false,
+            showPagingToolbar: false,
+            store: custom_store,
+            maxHeight: 300,
+            margin: '20 0 0 0',
+            emptyText: empty_text,
+            editingConfig: {
+                publishMessages: false
+            }
+        });
+
+        Ext.create('Rally.ui.Button',{
+            text: 'Add Workspace...',
+            renderTo: this.inputEl,
+            margin: '10 0 0 0',
+            listeners: {
+                scope: this,
+                click: this._addWorkspace
+            }
+        });
+
+
+        var width = Math.max(this.inputEl.getWidth(true),300);
+
+        this.fireEvent('ready', true);
+
+    },
+    _addWorkspace: function(){
+
+        if (this.workspaces){
+            this._showWorkspaceDialog(this.workspaces);
+        } else {
+            CArABU.technicalservices.WsapiToolbox.fetchWorkspaces().then({
+                success: this._showWorkspaceDialog,
+                failure: this._showError,
+                scope: this
+            });
+        }
+    },
+    _showWorkspaceDialog: function(workspaces, selectedWorkspaceStore){
+        this.workspaces = workspaces;
+        var width = this.getWidth();
+
+        var cfg = Ext.create('CArABU.technicalservices.WorkspaceConfigurationDialog', {
+            autoShow: true,
+            maxHeight: 400,
+            maxWidth: 400,
+            workspaces: workspaces,
+            selectedWorkspaceStore: selectedWorkspaceStore,
+            workspaceSettings: this.workspaceSettings,
+            width: Math.min(width, 400),
+            title: 'Add Workspace'
+        });
+        cfg.on('saveconfiguration', this._saveConfiguration, this);
+    },
+    _saveConfiguration: function(workspaceStore){
+        var found = false;
+        Ext.Array.each(this._grid.getStore().getRange(), function(r){
+            if (r.get('Name') === workspaceStore.Name){
+                found = true;
+                r.set('linkField', workspaceStore.linkField);
+                r.set('mappings', workspaceStore.mappings);
+                r.set('portfolioItemTypes', workspaceStore.portfolioItemTypes);
+                r.set('portfolioItemStates', workspaceStore.portfolioItemStates);
+                r.set('models', workspaceStore.models);
+                r.save();
+                return false;
+            }
+        });
+        if (!found){
+            this._grid.getStore().add(workspaceStore);
+        }
+
+    },
+    _showError: function(msg){
+        //TODO add error text
+    },
+
+    _getColumnCfgs: function() {
+        var me = this;
+
+        var columns = [{
+            xtype: 'rallyrowactioncolumn',
+            rowActionsFn: function (record) {
+                return [
+                    {
+                        xtype: 'rallyrecordmenuitem',
+                        record: record,
+                        text: "Edit...",
+                        handler: function(){
+                            var objId = record.get('ObjectID');
+                            me._showWorkspaceDialog(me.workspaces, record.getData());
+                         },
+                         scope: me
+                    },{
+                        xtype: 'rallyrecordmenuitem',
+                        record: record,
+                        text: 'Delete',
+                        handler: function(){
+                            this._grid.getStore().remove(record);
+                            record.destroy();
+                        },
+                        scope: me
+                    }
+                ];
+            }
+        },{
+            text: 'Workspace',
+            dataIndex: 'Name',
+            flex: 1,
+            editor: false
+        },{
+            text: 'Link Field',
+            dataIndex: 'linkField'
+        }];
+        return columns;
+    },
+    _buildValue: function(){
+        var data = {};
+        //todo build from store
+        Ext.Array.each(this._grid.getStore().getRange(), function(r){
+
+            data[r.get('ObjectID')] = {
+                _ref: r.get('_ref'),
+                Name: r.get('Name'),
+                ObjectID: r.get('ObjectID'),
+                linkField: r.get('linkField'),
+                portfolioItemTypes: r.get('portfolioItemTypes'),
+                mappings: r.get('mappings'),
+                portfolioItemStates: r.get('portfolioItemStates')
+            };
+
+        });
+        return data;
+    },
+    /**
+     * When a form asks for the data this field represents,
+     * give it the name of this field and the ref of the selected project (or an empty string).
+     * Used when persisting the value of this field.
+     * @return {Object}
+     */
+    getSubmitData: function() {
+        var data = {}, val = this._buildValue();
+        data[this.name] = Ext.JSON.encode(val);
+        return data;  
+    },
+    getErrors: function() {
+        var errors = [];
+        //Add validation here
+        return errors;
+    },
+    setValue: function(value) {
+        this.callParent(arguments);
+        this._value = value;
+    }
+});
+
+Ext.define('CArABU.technicalservices.WsapiToolbox',{
+    singleton: true,
+    fetchWorkspaces: function(){
+        var deferred = Ext.create('Deft.Deferred');
+        Ext.create('Rally.data.wsapi.Store', {
+            model: 'Subscription',
+            fetch: ['Workspaces','Name','ObjectID']
+        }).load({
+            callback: function(records, operation, success){
+                if (success){
+                    records[0].getCollection('Workspaces',{
+                        fetch: ['ObjectID','Name','State'],
+                        limit: 'Infinity',
+                        buffered: false
+                    }).load({
+                        callback: function(workspaces, operation){
+                            if (operation.wasSuccessful()){
+                                deferred.resolve(workspaces);
+                            } else {
+                                deferred.reject('Error loading workspace information: ' + operation.error && operation.error.errors.join(','));
+                            }
+                        }
+                    });
+                } else {
+                    deferred.reject('Error querying Subscription: ' + operation.error && operation.error.errors.join(','));
+                }
+            },
+            scope: this
+        });
+        return deferred;
+    },
+    fetchPortfolioItemTypes: function(context){
+        var deferred = Ext.create('Deft.Deferred');
+
+        Ext.create('Rally.data.wsapi.Store', {
+            model: 'TypeDefinition',
+            fetch: ['TypePath', 'Ordinal','Name'],
+            context: context,
+            filters: [
+                {
+                    property: 'Parent.Name',
+                    operator: '=',
+                    value: 'Portfolio Item'
+                },
+                {
+                    property: 'Creatable',
+                    operator: '=',
+                    value: 'true'
+                }
+            ],
+            sorters: [{
+                property: 'Ordinal',
+                direction: 'ASC'
+            }]
+        }).load({
+            callback: function(records, operation, success){
+                if (success){
+                    deferred.resolve(records);
+                } else {
+                    var error_msg = '';
+                    if (operation && operation.error && operation.error.errors){
+                        error_msg = operation.error.errors.join(',');
+                    }
+                    deferred.reject('Error loading Portfolio Item Types:  ' + error_msg);
+                }
+            }
+        });
+        return deferred.promise;
+    },
+    fetchAllowedValues: function(model, field){
+        var deferred = Ext.create('Deft.Deferred');
+        model.getField(field).getAllowedValueStore().load({
+            callback: function(records, operation, success) {
+                if (success){
+                    deferred.resolve(records);
+                } else {
+                    deferred.reject('Error fetching AllowedValues:  ' + operation.error.errors.join(','));
+                }
+            }
+        });
+        return deferred;
+    }
+});
+Ext.define("cross-workspace-list", {
     extend: 'Rally.app.App',
     componentCls: 'app',
     logger: new Rally.technicalservices.Logger(),
     defaults: { margin: 10 },
+
+    integrationHeaders : {
+        name : "cross-workspace-list"
+    },
+
     items: [
-        {xtype:'container',itemId:'settings_box'},
-        {xtype:'container',itemId:'selector_box'},
-        {xtype:'container',itemId:'display_box'},
-        {xtype:'tsinfolink'}
+        {xtype:'container',itemId:'selector_box', layout: 'hbox'},
+        {xtype:'container',itemId:'display_box'}
     ],
     config: {
         defaultSettings: {
             fieldsToCopy: ['Name','Description','PlanEstimate','ScheduleState'],
             fieldsToUpdate: ['Name','Description','PlanEstimate','ScheduleState'],
             gridFields: ['FormattedID','Name','ScheduleState','PlanEstimate'],
-            link_field: undefined
+            copyFields: ['Name','ScheduleState','Description','PlanEstimate','State','PlannedStartDate','PlannedEndDate'],
+            workspaceSettings: "{}"
         }
     },
+
+    sourcePortfolioItemTypes: [],
+    workspaceSettings: null,
+
     launch: function() {
-        if (!this.getSettings().link_field) {
+
+        CArABU.technicalservices.WorkspaceSettingsUtility.context = this.getContext();
+
+        this.logger.log('launch', this.getSetting('workspaceSettings'));
+        this._initializeWorkspaceSettingsHash(this.getSettings());
+    },
+    /**
+     * Initializes the current workspace settings, loading in the link field, as well as the states and
+     * portfolio item types.
+     * @returns {Deft.Deferred}
+     * @private
+     */
+    _initializeWorkspaceSettingsHash: function(settings){
+        this.logger.log('_initializeWorkspaceSettingsHash', settings, settings.workspaceSettings);
+
+        CArABU.technicalservices.WorkspaceSettingsUtility.initializeWorkspaceSettingsHash(settings.workspaceSettings, this.getContext(), settings.link_field).then({
+            success: function(workspaceSettingsHash){
+                this.logger.log('_initializeWorkspaceSettingsHash SUCCESS', workspaceSettingsHash);
+                //CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash = workspaceSettingsHash;
+                //this.workspaceSettingsHash = workspaceSettingsHash;
+                this._addSelectors();
+            },
+            failure: function(errorMsg){
+                this.logger.log('_initializeWorkspaceSettingsHash FAILURE', errorMsg);
+                Rally.ui.notify.Notifier.showError({
+                    message: "Error initializing workspace settings: " + errorMsg
+                });
+
+            },
+            scope: this
+        });
+
+
+        //this.workspaceSettings = Ext.create('CArABU.technicalservices.WorkspaceSettings',{
+        //    context: this.getContext()
+        //});
+        //this.workspaceSettings.on('ready', this._addSelectors, this);
+        //this.logger.log('workspace settings', this.getSetting('workspaceSettings'));
+        //this.workspaceSettings.initialize(this._getDecodedWorkspaceSettings(), this.getSetting('link_field') || "");
+    },
+    getWorkspaceSettingsHash: function(){
+        return CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash;
+    },
+    _addSelectors: function() {
+
+        this.down('#display_box').removeAll();
+
+       // var destinationWorkspaces = this.workspaceSettings && this.workspaceSettings.getDestinationWorkspaces() || [];
+        this.logger.log('_addSelectors',this.getWorkspaceSettingsHash());
+        var destinationWorkspaces = CArABU.technicalservices.WorkspaceSettingsUtility.getDestinationWorkspaceConfigurations(this.getWorkspaceSettingsHash()) || [];
+        if (destinationWorkspaces.length === 0  || this.getSetting('link_field') == "") {
             this.down('#display_box').add({
-                xtype:'container',
+                xtype: 'container',
                 html: 'Use the "App Settings..." menu choice to configure this app'
             });
-        } else {
-            if (this.isExternal()){
-                this.showSettings(this.config);
-            } else {
-                this.onSettingsUpdate(this.getSettings());
-            }
-        }
-    },
-    _addSelectors: function(container) {
-        container.add({
-            xtype:'rallybutton',
-            text :'Create in Other Workspace',
-            itemId:'create_button',
-            disabled: true,
-            listeners: {
-                scope: this,
-                click: this._launchCopyDialog
-            }
-        });
-
-        container.add({
-            xtype: 'rallybutton',
-            text: 'Update',
-            itemId: 'btn-update',
-            listeners: {
-                scope: this,
-                click: this._update
-            }
-        });
-    },
-    _update: function(){
-
-        var records_to_update= this.down('#link-grid').getStore().getRecords();  //Todo handle paging
-
-        var updater = Ext.create('Rally.technicalservices.artifactCopier',{
-            fieldsToCopy: this.fieldsToUpdate,
-            linkField: this.getSetting('link_field'),
-            context: this.getContext(),
-            listeners: {
-                scope: this,
-                artifactupdated: function(originalArtifact){
-                    this.logger.log('artifactupdated', originalArtifact);
-                    Rally.ui.notify.Notifier.showUpdate({artifact: originalArtifact});
-                    this.down('#link-grid').getStore().reload();
-                },
-                updateerror: function(msg){
-                    this.logger.log('updateerror',msg);
-                    Rally.ui.notify.Notifier.showError({message: msg});
-                },
-                updatewarning: function(msg){
-                    this.logger.log('updatewarning',msg);
-                    Rally.ui.notify.Notifier.showWarning({message: msg});
-                }
-            }
-        });
-        _.each(records_to_update, function(r){
-            updater.updateFromLinkedArtifact(r);
-        });
-    },
-    _gatherData: function(settings) {
-        this.down('#display_box').removeAll();
-        
-        this.logger.log("Settings are:", settings);
-        
-        var model_name = 'UserStory';
-        var field_names = _.uniq(['FormattedID'].concat(this.fieldsToCopy).concat([this.link_field]).concat(this.fieldsToUpdate));
-        this.logger.log('_gatherData',field_names, settings.link_field);
-
-        var filters = [{property:settings.link_field, operator:'contains', value: 'href' }];
-
-        Ext.create('Rally.data.wsapi.Store',{
-            model: model_name,
-            fetch: field_names,
-            filters: filters,
-            autoLoad: true,
-            listeners: {
-                scope: this,
-                load: function(store, records, success){
-                    this.logger.log('store',store, records);
-                    var fields = this.gridFields.concat(this.link_field);
-                    this._displayGrid(store,fields,this.link_field);
-                }
-            }
-        });
-    },
-
-    _displayGrid: function(store,field_names, link_field){
-
-        if (this.down('#link-grid')){
-            this.down('#link-grid').destroy();
+            return;
         }
 
-        var field_names = ['FormattedID','Name','ScheduleState'].concat(link_field);
-
-        var columnCfgs = [];
-
-        _.each(field_names, function(f){
-            if (f == link_field){
-                columnCfgs.push({
-                    dataIndex: f,
-                    text: f
-                });
-            } else {
-                columnCfgs.push({dataIndex: f, text: f});
-            }
-        }, this);
-
-        this.down('#display_box').add({
-            xtype: 'rallygrid',
-            itemId: 'link-grid',
-            store: store,
-            columnCfgs: columnCfgs,
-            showRowActionsColumn: false
-        });
-    },
-    _launchCopyDialog: function() {
-
-        var filters = [{property:this.link_field, value: null }];
-        var fetch = [this.link_field].concat(this.fieldsToCopy);
-        this.logger.log('_launchCopyDialog',  this.fieldsToCopy, fetch);
-
-        Ext.create('Rally.technicalservices.dialog.CopyDialog', {
-            artifactTypes: ['userstory'],
+        var container = this.down('#selector_box');
+        var cb = container.add({
+            xtype: 'rallycombobox',
+            itemId: 'cbType',
+            fieldLabel: 'Display Type',
+            labelAlign: 'right',
+            width: 300,
+            margin: 5,
             storeConfig: {
-                fetch: fetch,
-                filters: filters,
-                context: {
-                    workspace: this.getContext().getWorkspace()._ref,
-                    project: this.getContext().getProject()._ref,
-                    projectScopeDown: this.getContext().getProjectScopeDown()
+                autoLoad: true,
+                model: 'TypeDefinition',
+                fetch: ['TypePath','DisplayName','Ordinal'],
+                filters: this.getTypeFilters(),
+                remoteFilter: true,
+                listeners: {
+                    load: this._updateView,
+                    scope: this
                 }
             },
-            autoShow: true,
-            height: 400,
-            title: 'Copy',
-            introText: 'Choose a target workspace/project and search for a story to copy',
-            multiple: false,
-            listeners: {
-                artifactchosen: function(dialog, selection){
-                    // {selectedRecords: x, targetProject: y, targetWorkspace: z }
-                    // selectedRecords is a model.  (In an array if multiple was true)
-                    // targetproject, targetworkspace are hashes (do not respond to .get('x'), but to .x
-                    this.logger.log('selected:',selection);
+            valueField: 'TypePath',
+            displayField: 'DisplayName'
+        });
+        cb.on('select', this._updateView, this);
+        // cb.on('ready', this._updateView, this);
 
-                    var copier = Ext.create('Rally.technicalservices.artifactCopier',{
-                        fieldsToCopy: this.fieldsToCopy,
-                        linkField: this.getSetting('link_field'),
-                        context: this.getContext(),
-                        listeners: {
-                            scope: this,
-                            artifactcreated: function(newArtifact){
-                               console.log('artifactcreated',newArtifact);
-//                                this.down('#link-grid').getStore().reload();
-                                Rally.ui.notify.Notifier.showCreate({artifact: newArtifact});
-                            },
-                            copyerror: function(error_msg){
-                                Rally.ui.notify.Notifier.showError({message: error_msg});
-                            },
-                            artifactupdated: function(originalArtifact){
-                                this.logger.log('artifactupdated', originalArtifact);
-                                Rally.ui.notify.Notifier.showUpdate({artifact: originalArtifact});
-                                this.down('#link-grid').getStore().reload();
-                            },
-                            updateerror: function(msg){
-                                this.logger.log('updateerror',msg);
-                                Rally.ui.notify.Notifier.showError({message: msg});
-                            }
-                        }
-                    });
-                    copier.copy(selection.targetWorkspace, selection.targetProject, selection.selectedRecords);
+        var btn = container.add({
+            xtype: 'rallybutton',
+            enableToggle: true,
+            itemId: 'btToggleState',
+            margin: 5,
+            iconCls: 'icon-link'
+        });
+
+
+        var syncBtn = container.add({
+            xtype: 'rallybutton',
+            itemId: 'btSync',
+            iconCls: 'icon-refresh',
+            margin: 5
+        });
+
+        btn.on('toggle', this._toggleView, this);
+        syncBtn.on('click', this._sync, this);
+
+    },
+    _toggleView: function(btn){
+        var allowSync = !btn.pressed,
+            syncBtn = this.getSyncButton();
+
+        this.logger.log('_toggleView', allowSync, syncBtn);
+
+        if (btn.pressed){
+            btn.removeCls('primary')
+            btn.addCls('secondary')
+        } else {
+            btn.removeCls('secondary')
+            btn.addCls('primary')
+        }
+        if (syncBtn) { syncBtn.setDisabled(allowSync); }
+
+        this._updateView();
+    },
+    _updateView: function(){
+        var type = this.getArtifactType(),
+            showLinkedItems = this.showLinkedItemsOnly();
+
+        this.logger.log('_updateView', type, showLinkedItems);
+
+        //Todo, filter out only synced items...If synced only is on, there are a couple of different behaviors:
+        // (1) only show items that are synced (starting at the highest level they are synced) - this will result in a mixed hierarchy
+        // (2) only show items for the selected type that are synced. -- this is easiest but need to ask about it....
+
+        Ext.create('Rally.data.wsapi.TreeStoreBuilder').build({
+            models: [type],
+            enableHierarchy: true,
+            fetch: this.getFetchList(type),
+            filters: this.getFilters()
+        }).then({
+            success: this._createTreeGrid,
+            scope: this
+        });
+
+    },
+    _sync: function(){
+
+        var sourceRecords= [], //Todo handle paging
+            linkField = this.getLinkField();
+
+        this.down('rallygridboard').getGridOrBoard().getStore().each(function(r){
+            if (r.get(linkField)){
+                sourceRecords.push(r);
+            }
+        });
+
+        this.logger.log('_sync', sourceRecords);
+
+        var loader = Ext.create('CArABU.technicalservices.ArtifactLoader',{
+            loadLinkedItems: true,
+            workspaceSettings: this.getWorkspaceSettingsHash(),
+            linkField: CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspaceLinkField(),
+            copyFields: CArABU.technicalservices.WorkspaceSettingsUtility.copyFields.concat(['LastUpdateDate',linkField]),
+            listeners: {
+                loaderror: function(error){
+                    this.logger.log('loaderror',error);
+                    Rally.ui.notify.Notifier.showError({message: error});
+                },
+                loadcomplete: function(records){
+                    this.logger.log('loadcomplete',records);
+                    this.syncRecords(records);
                 },
                 scope: this
             }
-         });
+        });
+        loader.loadHierarchy(sourceRecords);
+
     },
 
-    /********************************************
-     /* Overrides for App class
-     /*
-     /********************************************/
-    //getSettingsFields:  Override for App
-    getSettingsFields: function() {
-        var me = this;
+    getLinkField: function(){
+        return this.getSetting('link_field');
+    },
+    getGridFields: function(){
+        //Todo make sure this is returned as an array in Rally
+        return this.getSetting('gridFields') || [];
+    },
+    getTypeFilters: function(){
+        var filters = Rally.data.wsapi.Filter.or([{
+            property: 'TypePath',
+            value: 'HierarchicalRequirement'
+        },{
+            property: 'TypePath',
+            operator: 'contains',
+            value: 'PortfolioItem/'
+        }]);
+        return filters;
+    },
+    getArtifactType: function(){
+        return this.down('#cbType') && this.down('#cbType').getValue() || null;
+    },
+    showLinkedItemsOnly: function(){
+        return this.down('#btToggleState') && this.down('#btToggleState').pressed;
+    },
+    getSyncButton: function(){
+        return this.down('#btSync');
+    },
+    getFetchList: function(type){
+        //Todo this will come from the workspace mapper or configurations at some point...
+        var fetch = ['FormattedID','Name'].concat([this.getLinkField()]);
+        if (type === 'HierarchicalRequirement'){
+            fetch = fetch.concat['ScheduleState'];
+        } else { //Portfolio Items
+            fetch = fetch.concat['State','PlannedStartDate','PlannedEndDate'];
+        }
+        return fetch;
+    },
+    getColumnCfgs: function(type){
+        var cols = ['Name',this.getLinkField()];
+        if (type === 'HierarchicalRequirement'){
+            cols = cols.concat(['ScheduleState']);
+        } else { //Portfolio Items
+            cols = cols.concat(['State','PlannedStartDate','PlannedEndDate']);
+        }
+        this.logger.log('columnCfgs', cols);
+        return cols;
+    },
 
+    getFieldsToCopy: function(){
+        return ['Name','ScheduleState','Description','PlanEstimate','State','PlannedStartDate','PlannedEndDate'];
+    },
+    getFilters: function(){
+        if (this.showLinkedItemsOnly()){
+            return [{
+                property: this.getLinkField(),
+                operator: "contains",
+                value: "href"
+            }];
+        }
+        return [];
+    },
+    getNoDataPrimaryText: function(){
+        if (this.showLinkedItemsOnly()){
+            return "No linked work items were found.";
+        }
+        return null;
+    },
+    getNoDataSecondaryText: function(){
+        if (this.showLinkedItemsOnly()){
+            return "No linked work items were found for the selected type in the current workspace and project scope.";
+        }
+        return null;
+    },
+    getWorkspaces: function(){
+        this.logger.log('getWorkspaces', this.sourcePortfolioItemTypes);
+        if (!this.workspaceSettings){
+            this.workspaceSettings = Ext.create('CArABU.technicalservices.WorkspaceSettings',{
+                sourcePortfolioItemTypes: this.sourcePortfolioItemTypes,
+                context: this.getContext()
+            });
+        }
+        return this.workspaceSettings;
+    },
+    _createTreeGrid: function(store){
+
+        var box = this.down('#display_box'),
+            type = this.getArtifactType();
+        if (!box){
+            this.logger.log('No Display Box -- somethings wrong.');
+            return;
+        }
+        box.removeAll();
+        store.load();
+        box.add({
+            xtype: 'rallygridboard',
+            context: this.getContext(),
+            modelNames: [type],
+            toggleState: 'grid',
+            gridConfig: {
+                store: store,
+                storeConfig: {
+                    pageSize: 200
+                },
+                noDataPrimaryText: this.getNoDataPrimaryText(),
+                noDataSecondaryText: this.getNoDataSecondaryText(),
+                columnCfgs: this.getColumnCfgs(type),
+                bulkEditConfig: {
+                    items: [{
+                        xtype: 'bulkmenuitemxworkspacecopy' ,
+                        linkField: this.getLinkField(),
+                        typesToCopy: CArABU.technicalservices.WorkspaceSettingsUtility.getCopyableTypes(type, this.getContext()),
+                        copyFields: CArABU.technicalservices.WorkspaceSettingsUtility.copyFields,
+                        workspaceSettings: this.getWorkspaceSettingsHash(),
+                        context: this.getContext()
+                    },{
+                        xtype: 'bulkmenuitemxworkspacedeepcopy' ,
+                        linkField: this.getLinkField(),
+                        typesToCopy: CArABU.technicalservices.WorkspaceSettingsUtility.getCopyableTypes(type, this.getContext()),
+                        copyFields: CArABU.technicalservices.WorkspaceSettingsUtility.copyFields,
+                        workspaceSettings: this.getWorkspaceSettingsHash(),
+                        context: this.getContext()
+                    }]
+                }
+            },
+            plugins: [{
+                ptype: 'rallygridboardfieldpicker',
+                headerPosition: 'left',
+                modelNames: [type],
+                stateful: true,
+                stateId: this.getContext().getScopedStateId('columns')
+            }],
+            height: this.getHeight()
+        });
+    },
+
+    syncRecords: function(sourceRecords){
+        var syncer = Ext.create('CArABU.technicalservices.ArtifactSyncer',{
+            workspaceSettings: this.getWorkspaceSettingsHash(),
+            copyFields: CArABU.technicalservices.WorkspaceSettingsUtility.copyFields.concat[CArABU.technicalservices.WorkspaceSettingsUtility.syncFetchFields],
+            context: this.getContext(),
+            listeners: {
+                syncerror: function(error){
+                    this.logger.log('syncerror',error);
+                    Rally.ui.notify.Notifier.showError({message: error});
+                },
+                synccomplete: function(syncedRecords, unsyncedRecords, syncErrors){
+                    this.logger.log('synccomplete',syncedRecords, unsyncedRecords, syncErrors);
+                    var successfulRecords = syncedRecords && syncedRecords.length,
+                        totalRecords = sourceRecords.length;
+                    if (successfulRecords !== totalRecords){
+                        var msg = Ext.String.format("{0} of {1} records synced successfully.<br/><br/>Failures:<br/>",successfulRecords, totalRecords);
+                        for (var i =0; i< unsyncedRecords.length; i++){
+                            msg += Ext.String.format("[{0}] {1}<br/>", unsyncedRecords[i].get('_refObjectName'),syncErrors[i])
+                        }
+                        Rally.ui.notify.Notifier.showWarning({message: msg, allowHTML: true});
+                    } else {
+                        Rally.ui.notify.Notifier.show({message: Ext.String.format("All {0} records synced successfully.", successfulRecords)});
+                    }
+                },
+                syncstatus: function(status){
+                    this.logger.log('syncstatus',status);
+                    Rally.ui.notify.Notifier.show({message: status});
+                },
+                scope: this
+            }
+        });
+        syncer.sync(sourceRecords);
+    },
+    getSettingsFields: function(){
+        return CrossWorkspaceCopier.Settings.getFields(this.workspaceSettings);
+    },
+    
+    getOptions: function() {
         return [
             {
-                name: 'link_field',
-                xtype: 'rallyfieldcombobox',
-                fieldLabel: 'Link Field',
-                model: 'UserStory',
-                labelWidth: 200,
-                labelAlign: 'right',
-                minValue: 0,
-                _isNotHidden: function(field) {
-                    var attribute = field.attributeDefinition;
-                    if ( field.readOnly == true ) {
-                        return false;
-                    }
-               
-                    if ( attribute ) {
-                        if ( attribute.Constrained == true) {
-                            return false;
-                        }
-                            
-                        if ( attribute.AttributeType == "STRING" ) {
-                            //console.log(field.name,attribute.AttributeType,field);
-                            return true;
-                        }
-                    }
-                    return false;
-                }
+                text: 'About...',
+                handler: this._launchInfo,
+                scope: this
             }
         ];
     },
+    
+    _launchInfo: function() {
+        if ( this.about_dialog ) { this.about_dialog.destroy(); }
+        this.about_dialog = Ext.create('Rally.technicalservices.InfoLink',{});
+    },
+    
     isExternal: function(){
         return typeof(this.getAppId()) == 'undefined';
     },
-    //showSettings:  Override
-    showSettings: function(options) {
-        this._appSettings = Ext.create('Rally.app.AppSettings', Ext.apply({
-            fields: this.getSettingsFields(),
-            settings: this.getSettings(),
-            defaultSettings: this.getDefaultSettings(),
-            context: this.getContext(),
-            settingsScope: this.settingsScope,
-            autoScroll: true
-        }, options));
-
-        this._appSettings.on('cancel', this._hideSettings, this);
-        this._appSettings.on('save', this._onSettingsSaved, this);
-        if (this.isExternal()){
-            if (this.down('#settings_box').getComponent(this._appSettings.id)==undefined){
-                this.down('#settings_box').add(this._appSettings);
-            }
-        } else {
-            this.hide();
-            this.up().add(this._appSettings);
-        }
-        return this._appSettings;
-    },
-    _onSettingsSaved: function(settings){
-        Ext.apply(this.settings, settings);
-        this._hideSettings();
-        this.onSettingsUpdate(settings);
-    },
+    
     //onSettingsUpdate:  Override
     onSettingsUpdate: function (settings){
         this.logger.log('onSettingsUpdate',settings);
-        Ext.apply(this, settings);
+        this._initializeWorkspaceSettingsHash(settings);
+    },
 
-        this._addSelectors(this.down('#selector_box'));
+    /**
+     * Update the settings for this app in preferences.
+     * Provide a settings hash and this will update existing prefs or create new prefs.
+     * @param options.settings the settings to create/update
+     * @param options.success called when the prefs are loaded
+     * @param options.scope scope to call success with
+     */
+    updateSettingsValues: function(options) {
 
-        this.down('#create_button').setDisabled(false);
-        
-        this._gatherData(settings);
-    }
+        Rally.data.PreferenceManager.update(Ext.apply(this._getAppSettingsLoadOptions(), {
+            requester: this,
+            settings: options.settings,
+            success: function(updatedSettings) {
+                Ext.apply(this.settings, updatedSettings);
+
+                if (options.success) {
+                    options.success.call(options.scope);
+                }
+            },
+            scope: this
+        }));
+    },
 });
 
             
-               Rally.launchApp('TSCrossWorkspaceTracker', {
-                   name: 'Cross-Workspace Tracker'
+               Rally.launchApp('cross-workspace-list', {
+                   name: 'Cross Workspace List'
                });
         });
     </script>
@@ -1303,6 +4054,10 @@ Ext.define("TSCrossWorkspaceTracker", {
     margin-top: 25px;
     margin-right: 5px;
     cursor: pointer;
+}
+
+.warning {
+    color: red;
 }
     </style>
 

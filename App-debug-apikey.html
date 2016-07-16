@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cross Workspace List</title>
+    <script type="text/javascript">
+        var APP_BUILD_DATE = "Sat Jul 16 2016 17:45:55 GMT-0600 (MDT)";
+    </script>
+    
+    <script type="text/javascript" src="https://rally1.rallydev.com/apps/2.1/sdk-debug.js?apiKey=_PUT_APIKEY_HERE_"></script>
+
+    <script type="text/javascript">
+        Rally.onReady(function() {
+            Rally.loadScripts(["src/javascript/utils/__ts-info-link.js","src/javascript/utils/__ts-logger.js","src/javascript/utils/_ts-copydialog.js","src/javascript/utils/_ts-error_obj.js","src/javascript/utils/_ts-project-tree.js","src/javascript/utils/artifact-copier.js","src/javascript/utils/artifact-loader.js","src/javascript/utils/artifact-syncer.js","src/javascript/utils/artifact-tree.js","src/javascript/utils/menuitem-xworkspace-copybase.js","src/javascript/utils/menuitem-xworkspace-deepcopy.js","src/javascript/utils/menuitem-xworkspacecopy.js","src/javascript/utils/settings.js","src/javascript/utils/workspace-configuration-dialog.js","src/javascript/utils/workspace-copy-dialog.js","src/javascript/utils/workspace-settings-factory.js","src/javascript/utils/workspace-settings-form.js","src/javascript/utils/wsapi-toolbox.js","src/javascript/app.js"],
+	            function() {
+	                Rally.launchApp('cross-workspace-list', {
+	                    name: 'Cross Workspace List'
+	                })
+	            }, true);
+        });
+    </script>
+<link rel="stylesheet" type="text/css" href="src/style/app.css">
+
+</head>
+<body></body>
+</html>

@@ -1,282 +1,423 @@
-Ext.define("TSCrossWorkspaceTracker", {
+Ext.define("cross-workspace-list", {
     extend: 'Rally.app.App',
     componentCls: 'app',
     logger: new Rally.technicalservices.Logger(),
     defaults: { margin: 10 },
+
+    integrationHeaders : {
+        name : "cross-workspace-list"
+    },
+
     items: [
-        {xtype:'container',itemId:'settings_box'},
-        {xtype:'container',itemId:'selector_box'},
-        {xtype:'container',itemId:'display_box'},
-        {xtype:'tsinfolink'}
+        {xtype:'container',itemId:'selector_box', layout: 'hbox'},
+        {xtype:'container',itemId:'display_box'}
     ],
     config: {
         defaultSettings: {
             fieldsToCopy: ['Name','Description','PlanEstimate','ScheduleState'],
             fieldsToUpdate: ['Name','Description','PlanEstimate','ScheduleState'],
             gridFields: ['FormattedID','Name','ScheduleState','PlanEstimate'],
-            link_field: undefined
+            copyFields: ['Name','ScheduleState','Description','PlanEstimate','State','PlannedStartDate','PlannedEndDate'],
+            workspaceSettings: "{}"
         }
     },
+
+    sourcePortfolioItemTypes: [],
+    workspaceSettings: null,
+
     launch: function() {
-        if (!this.getSettings().link_field) {
+
+        CArABU.technicalservices.WorkspaceSettingsUtility.context = this.getContext();
+
+        this.logger.log('launch', this.getSetting('workspaceSettings'));
+        this._initializeWorkspaceSettingsHash(this.getSettings());
+    },
+    /**
+     * Initializes the current workspace settings, loading in the link field, as well as the states and
+     * portfolio item types.
+     * @returns {Deft.Deferred}
+     * @private
+     */
+    _initializeWorkspaceSettingsHash: function(settings){
+        this.logger.log('_initializeWorkspaceSettingsHash', settings, settings.workspaceSettings);
+
+        CArABU.technicalservices.WorkspaceSettingsUtility.initializeWorkspaceSettingsHash(settings.workspaceSettings, this.getContext(), settings.link_field).then({
+            success: function(workspaceSettingsHash){
+                this.logger.log('_initializeWorkspaceSettingsHash SUCCESS', workspaceSettingsHash);
+                //CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash = workspaceSettingsHash;
+                //this.workspaceSettingsHash = workspaceSettingsHash;
+                this._addSelectors();
+            },
+            failure: function(errorMsg){
+                this.logger.log('_initializeWorkspaceSettingsHash FAILURE', errorMsg);
+                Rally.ui.notify.Notifier.showError({
+                    message: "Error initializing workspace settings: " + errorMsg
+                });
+
+            },
+            scope: this
+        });
+
+
+        //this.workspaceSettings = Ext.create('CArABU.technicalservices.WorkspaceSettings',{
+        //    context: this.getContext()
+        //});
+        //this.workspaceSettings.on('ready', this._addSelectors, this);
+        //this.logger.log('workspace settings', this.getSetting('workspaceSettings'));
+        //this.workspaceSettings.initialize(this._getDecodedWorkspaceSettings(), this.getSetting('link_field') || "");
+    },
+    getWorkspaceSettingsHash: function(){
+        return CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash;
+    },
+    _addSelectors: function() {
+
+        this.down('#display_box').removeAll();
+
+       // var destinationWorkspaces = this.workspaceSettings && this.workspaceSettings.getDestinationWorkspaces() || [];
+        this.logger.log('_addSelectors',this.getWorkspaceSettingsHash());
+        var destinationWorkspaces = CArABU.technicalservices.WorkspaceSettingsUtility.getDestinationWorkspaceConfigurations(this.getWorkspaceSettingsHash()) || [];
+        if (destinationWorkspaces.length === 0  || this.getSetting('link_field') == "") {
             this.down('#display_box').add({
-                xtype:'container',
+                xtype: 'container',
                 html: 'Use the "App Settings..." menu choice to configure this app'
             });
-        } else {
-            if (this.isExternal()){
-                this.showSettings(this.config);
-            } else {
-                this.onSettingsUpdate(this.getSettings());
-            }
-        }
-    },
-    _addSelectors: function(container) {
-        container.add({
-            xtype:'rallybutton',
-            text :'Create in Other Workspace',
-            itemId:'create_button',
-            disabled: true,
-            listeners: {
-                scope: this,
-                click: this._launchCopyDialog
-            }
-        });
-
-        container.add({
-            xtype: 'rallybutton',
-            text: 'Update',
-            itemId: 'btn-update',
-            listeners: {
-                scope: this,
-                click: this._update
-            }
-        });
-    },
-    _update: function(){
-
-        var records_to_update= this.down('#link-grid').getStore().getRecords();  //Todo handle paging
-
-        var updater = Ext.create('Rally.technicalservices.artifactCopier',{
-            fieldsToCopy: this.fieldsToUpdate,
-            linkField: this.getSetting('link_field'),
-            context: this.getContext(),
-            listeners: {
-                scope: this,
-                artifactupdated: function(originalArtifact){
-                    this.logger.log('artifactupdated', originalArtifact);
-                    Rally.ui.notify.Notifier.showUpdate({artifact: originalArtifact});
-                    this.down('#link-grid').getStore().reload();
-                },
-                updateerror: function(msg){
-                    this.logger.log('updateerror',msg);
-                    Rally.ui.notify.Notifier.showError({message: msg});
-                },
-                updatewarning: function(msg){
-                    this.logger.log('updatewarning',msg);
-                    Rally.ui.notify.Notifier.showWarning({message: msg});
-                }
-            }
-        });
-        _.each(records_to_update, function(r){
-            updater.updateFromLinkedArtifact(r);
-        });
-    },
-    _gatherData: function(settings) {
-        this.down('#display_box').removeAll();
-        
-        this.logger.log("Settings are:", settings);
-        
-        var model_name = 'UserStory';
-        var field_names = _.uniq(['FormattedID'].concat(this.fieldsToCopy).concat([this.link_field]).concat(this.fieldsToUpdate));
-        this.logger.log('_gatherData',field_names, settings.link_field);
-
-        var filters = [{property:settings.link_field, operator:'contains', value: 'href' }];
-
-        Ext.create('Rally.data.wsapi.Store',{
-            model: model_name,
-            fetch: field_names,
-            filters: filters,
-            autoLoad: true,
-            listeners: {
-                scope: this,
-                load: function(store, records, success){
-                    this.logger.log('store',store, records);
-                    var fields = this.gridFields.concat(this.link_field);
-                    this._displayGrid(store,fields,this.link_field);
-                }
-            }
-        });
-    },
-
-    _displayGrid: function(store,field_names, link_field){
-
-        if (this.down('#link-grid')){
-            this.down('#link-grid').destroy();
+            return;
         }
 
-        var field_names = ['FormattedID','Name','ScheduleState'].concat(link_field);
-
-        var columnCfgs = [];
-
-        _.each(field_names, function(f){
-            if (f == link_field){
-                columnCfgs.push({
-                    dataIndex: f,
-                    text: f
-                });
-            } else {
-                columnCfgs.push({dataIndex: f, text: f});
-            }
-        }, this);
-
-        this.down('#display_box').add({
-            xtype: 'rallygrid',
-            itemId: 'link-grid',
-            store: store,
-            columnCfgs: columnCfgs,
-            showRowActionsColumn: false
-        });
-    },
-    _launchCopyDialog: function() {
-
-        var filters = [{property:this.link_field, value: null }];
-        var fetch = [this.link_field].concat(this.fieldsToCopy);
-        this.logger.log('_launchCopyDialog',  this.fieldsToCopy, fetch);
-
-        Ext.create('Rally.technicalservices.dialog.CopyDialog', {
-            artifactTypes: ['userstory'],
+        var container = this.down('#selector_box');
+        var cb = container.add({
+            xtype: 'rallycombobox',
+            itemId: 'cbType',
+            fieldLabel: 'Display Type',
+            labelAlign: 'right',
+            width: 300,
+            margin: 5,
             storeConfig: {
-                fetch: fetch,
-                filters: filters,
-                context: {
-                    workspace: this.getContext().getWorkspace()._ref,
-                    project: this.getContext().getProject()._ref,
-                    projectScopeDown: this.getContext().getProjectScopeDown()
+                autoLoad: true,
+                model: 'TypeDefinition',
+                fetch: ['TypePath','DisplayName','Ordinal'],
+                filters: this.getTypeFilters(),
+                remoteFilter: true,
+                listeners: {
+                    load: this._updateView,
+                    scope: this
                 }
             },
-            autoShow: true,
-            height: 400,
-            title: 'Copy',
-            introText: 'Choose a target workspace/project and search for a story to copy',
-            multiple: false,
-            listeners: {
-                artifactchosen: function(dialog, selection){
-                    // {selectedRecords: x, targetProject: y, targetWorkspace: z }
-                    // selectedRecords is a model.  (In an array if multiple was true)
-                    // targetproject, targetworkspace are hashes (do not respond to .get('x'), but to .x
-                    this.logger.log('selected:',selection);
+            valueField: 'TypePath',
+            displayField: 'DisplayName'
+        });
+        cb.on('select', this._updateView, this);
+        // cb.on('ready', this._updateView, this);
 
-                    var copier = Ext.create('Rally.technicalservices.artifactCopier',{
-                        fieldsToCopy: this.fieldsToCopy,
-                        linkField: this.getSetting('link_field'),
-                        context: this.getContext(),
-                        listeners: {
-                            scope: this,
-                            artifactcreated: function(newArtifact){
-                               console.log('artifactcreated',newArtifact);
-//                                this.down('#link-grid').getStore().reload();
-                                Rally.ui.notify.Notifier.showCreate({artifact: newArtifact});
-                            },
-                            copyerror: function(error_msg){
-                                Rally.ui.notify.Notifier.showError({message: error_msg});
-                            },
-                            artifactupdated: function(originalArtifact){
-                                this.logger.log('artifactupdated', originalArtifact);
-                                Rally.ui.notify.Notifier.showUpdate({artifact: originalArtifact});
-                                this.down('#link-grid').getStore().reload();
-                            },
-                            updateerror: function(msg){
-                                this.logger.log('updateerror',msg);
-                                Rally.ui.notify.Notifier.showError({message: msg});
-                            }
-                        }
-                    });
-                    copier.copy(selection.targetWorkspace, selection.targetProject, selection.selectedRecords);
+        var btn = container.add({
+            xtype: 'rallybutton',
+            enableToggle: true,
+            itemId: 'btToggleState',
+            margin: 5,
+            iconCls: 'icon-link'
+        });
+
+
+        var syncBtn = container.add({
+            xtype: 'rallybutton',
+            itemId: 'btSync',
+            iconCls: 'icon-refresh',
+            margin: 5
+        });
+
+        btn.on('toggle', this._toggleView, this);
+        syncBtn.on('click', this._sync, this);
+
+    },
+    _toggleView: function(btn){
+        var allowSync = !btn.pressed,
+            syncBtn = this.getSyncButton();
+
+        this.logger.log('_toggleView', allowSync, syncBtn);
+
+        if (btn.pressed){
+            btn.removeCls('primary')
+            btn.addCls('secondary')
+        } else {
+            btn.removeCls('secondary')
+            btn.addCls('primary')
+        }
+        if (syncBtn) { syncBtn.setDisabled(allowSync); }
+
+        this._updateView();
+    },
+    _updateView: function(){
+        var type = this.getArtifactType(),
+            showLinkedItems = this.showLinkedItemsOnly();
+
+        this.logger.log('_updateView', type, showLinkedItems);
+
+        //Todo, filter out only synced items...If synced only is on, there are a couple of different behaviors:
+        // (1) only show items that are synced (starting at the highest level they are synced) - this will result in a mixed hierarchy
+        // (2) only show items for the selected type that are synced. -- this is easiest but need to ask about it....
+
+        Ext.create('Rally.data.wsapi.TreeStoreBuilder').build({
+            models: [type],
+            enableHierarchy: true,
+            fetch: this.getFetchList(type),
+            filters: this.getFilters()
+        }).then({
+            success: this._createTreeGrid,
+            scope: this
+        });
+
+    },
+    _sync: function(){
+
+        var sourceRecords= [], //Todo handle paging
+            linkField = this.getLinkField();
+
+        this.down('rallygridboard').getGridOrBoard().getStore().each(function(r){
+            if (r.get(linkField)){
+                sourceRecords.push(r);
+            }
+        });
+
+        this.logger.log('_sync', sourceRecords);
+
+        var loader = Ext.create('CArABU.technicalservices.ArtifactLoader',{
+            loadLinkedItems: true,
+            workspaceSettings: this.getWorkspaceSettingsHash(),
+            linkField: CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspaceLinkField(),
+            copyFields: CArABU.technicalservices.WorkspaceSettingsUtility.copyFields.concat(['LastUpdateDate',linkField]),
+            listeners: {
+                loaderror: function(error){
+                    this.logger.log('loaderror',error);
+                    Rally.ui.notify.Notifier.showError({message: error});
+                },
+                loadcomplete: function(records){
+                    this.logger.log('loadcomplete',records);
+                    this.syncRecords(records);
                 },
                 scope: this
             }
-         });
+        });
+        loader.loadHierarchy(sourceRecords);
+
     },
 
-    /********************************************
-     /* Overrides for App class
-     /*
-     /********************************************/
-    //getSettingsFields:  Override for App
-    getSettingsFields: function() {
-        var me = this;
+    getLinkField: function(){
+        return this.getSetting('link_field');
+    },
+    getGridFields: function(){
+        //Todo make sure this is returned as an array in Rally
+        return this.getSetting('gridFields') || [];
+    },
+    getTypeFilters: function(){
+        var filters = Rally.data.wsapi.Filter.or([{
+            property: 'TypePath',
+            value: 'HierarchicalRequirement'
+        },{
+            property: 'TypePath',
+            operator: 'contains',
+            value: 'PortfolioItem/'
+        }]);
+        return filters;
+    },
+    getArtifactType: function(){
+        return this.down('#cbType') && this.down('#cbType').getValue() || null;
+    },
+    showLinkedItemsOnly: function(){
+        return this.down('#btToggleState') && this.down('#btToggleState').pressed;
+    },
+    getSyncButton: function(){
+        return this.down('#btSync');
+    },
+    getFetchList: function(type){
+        //Todo this will come from the workspace mapper or configurations at some point...
+        var fetch = ['FormattedID','Name'].concat([this.getLinkField()]);
+        if (type === 'HierarchicalRequirement'){
+            fetch = fetch.concat['ScheduleState'];
+        } else { //Portfolio Items
+            fetch = fetch.concat['State','PlannedStartDate','PlannedEndDate'];
+        }
+        return fetch;
+    },
+    getColumnCfgs: function(type){
+        var cols = ['Name',this.getLinkField()];
+        if (type === 'HierarchicalRequirement'){
+            cols = cols.concat(['ScheduleState']);
+        } else { //Portfolio Items
+            cols = cols.concat(['State','PlannedStartDate','PlannedEndDate']);
+        }
+        this.logger.log('columnCfgs', cols);
+        return cols;
+    },
 
+    getFieldsToCopy: function(){
+        return ['Name','ScheduleState','Description','PlanEstimate','State','PlannedStartDate','PlannedEndDate'];
+    },
+    getFilters: function(){
+        if (this.showLinkedItemsOnly()){
+            return [{
+                property: this.getLinkField(),
+                operator: "contains",
+                value: "href"
+            }];
+        }
+        return [];
+    },
+    getNoDataPrimaryText: function(){
+        if (this.showLinkedItemsOnly()){
+            return "No linked work items were found.";
+        }
+        return null;
+    },
+    getNoDataSecondaryText: function(){
+        if (this.showLinkedItemsOnly()){
+            return "No linked work items were found for the selected type in the current workspace and project scope.";
+        }
+        return null;
+    },
+    getWorkspaces: function(){
+        this.logger.log('getWorkspaces', this.sourcePortfolioItemTypes);
+        if (!this.workspaceSettings){
+            this.workspaceSettings = Ext.create('CArABU.technicalservices.WorkspaceSettings',{
+                sourcePortfolioItemTypes: this.sourcePortfolioItemTypes,
+                context: this.getContext()
+            });
+        }
+        return this.workspaceSettings;
+    },
+    _createTreeGrid: function(store){
+
+        var box = this.down('#display_box'),
+            type = this.getArtifactType();
+        if (!box){
+            this.logger.log('No Display Box -- somethings wrong.');
+            return;
+        }
+        box.removeAll();
+        store.load();
+        box.add({
+            xtype: 'rallygridboard',
+            context: this.getContext(),
+            modelNames: [type],
+            toggleState: 'grid',
+            gridConfig: {
+                store: store,
+                storeConfig: {
+                    pageSize: 200
+                },
+                noDataPrimaryText: this.getNoDataPrimaryText(),
+                noDataSecondaryText: this.getNoDataSecondaryText(),
+                columnCfgs: this.getColumnCfgs(type),
+                bulkEditConfig: {
+                    items: [{
+                        xtype: 'bulkmenuitemxworkspacecopy' ,
+                        linkField: this.getLinkField(),
+                        typesToCopy: CArABU.technicalservices.WorkspaceSettingsUtility.getCopyableTypes(type, this.getContext()),
+                        copyFields: CArABU.technicalservices.WorkspaceSettingsUtility.copyFields,
+                        workspaceSettings: this.getWorkspaceSettingsHash(),
+                        context: this.getContext()
+                    },{
+                        xtype: 'bulkmenuitemxworkspacedeepcopy' ,
+                        linkField: this.getLinkField(),
+                        typesToCopy: CArABU.technicalservices.WorkspaceSettingsUtility.getCopyableTypes(type, this.getContext()),
+                        copyFields: CArABU.technicalservices.WorkspaceSettingsUtility.copyFields,
+                        workspaceSettings: this.getWorkspaceSettingsHash(),
+                        context: this.getContext()
+                    }]
+                }
+            },
+            plugins: [{
+                ptype: 'rallygridboardfieldpicker',
+                headerPosition: 'left',
+                modelNames: [type],
+                stateful: true,
+                stateId: this.getContext().getScopedStateId('columns')
+            }],
+            height: this.getHeight()
+        });
+    },
+
+    syncRecords: function(sourceRecords){
+        var syncer = Ext.create('CArABU.technicalservices.ArtifactSyncer',{
+            workspaceSettings: this.getWorkspaceSettingsHash(),
+            copyFields: CArABU.technicalservices.WorkspaceSettingsUtility.copyFields.concat[CArABU.technicalservices.WorkspaceSettingsUtility.syncFetchFields],
+            context: this.getContext(),
+            listeners: {
+                syncerror: function(error){
+                    this.logger.log('syncerror',error);
+                    Rally.ui.notify.Notifier.showError({message: error});
+                },
+                synccomplete: function(syncedRecords, unsyncedRecords, syncErrors){
+                    this.logger.log('synccomplete',syncedRecords, unsyncedRecords, syncErrors);
+                    var successfulRecords = syncedRecords && syncedRecords.length,
+                        totalRecords = sourceRecords.length;
+                    if (successfulRecords !== totalRecords){
+                        var msg = Ext.String.format("{0} of {1} records synced successfully.<br/><br/>Failures:<br/>",successfulRecords, totalRecords);
+                        for (var i =0; i< unsyncedRecords.length; i++){
+                            msg += Ext.String.format("[{0}] {1}<br/>", unsyncedRecords[i].get('_refObjectName'),syncErrors[i])
+                        }
+                        Rally.ui.notify.Notifier.showWarning({message: msg, allowHTML: true});
+                    } else {
+                        Rally.ui.notify.Notifier.show({message: Ext.String.format("All {0} records synced successfully.", successfulRecords)});
+                    }
+                },
+                syncstatus: function(status){
+                    this.logger.log('syncstatus',status);
+                    Rally.ui.notify.Notifier.show({message: status});
+                },
+                scope: this
+            }
+        });
+        syncer.sync(sourceRecords);
+    },
+    getSettingsFields: function(){
+        return CrossWorkspaceCopier.Settings.getFields(this.workspaceSettings);
+    },
+    
+    getOptions: function() {
         return [
             {
-                name: 'link_field',
-                xtype: 'rallyfieldcombobox',
-                fieldLabel: 'Link Field',
-                model: 'UserStory',
-                labelWidth: 200,
-                labelAlign: 'right',
-                minValue: 0,
-                _isNotHidden: function(field) {
-                    var attribute = field.attributeDefinition;
-                    if ( field.readOnly == true ) {
-                        return false;
-                    }
-               
-                    if ( attribute ) {
-                        if ( attribute.Constrained == true) {
-                            return false;
-                        }
-                            
-                        if ( attribute.AttributeType == "STRING" ) {
-                            //console.log(field.name,attribute.AttributeType,field);
-                            return true;
-                        }
-                    }
-                    return false;
-                }
+                text: 'About...',
+                handler: this._launchInfo,
+                scope: this
             }
         ];
     },
+    
+    _launchInfo: function() {
+        if ( this.about_dialog ) { this.about_dialog.destroy(); }
+        this.about_dialog = Ext.create('Rally.technicalservices.InfoLink',{});
+    },
+    
     isExternal: function(){
         return typeof(this.getAppId()) == 'undefined';
     },
-    //showSettings:  Override
-    showSettings: function(options) {
-        this._appSettings = Ext.create('Rally.app.AppSettings', Ext.apply({
-            fields: this.getSettingsFields(),
-            settings: this.getSettings(),
-            defaultSettings: this.getDefaultSettings(),
-            context: this.getContext(),
-            settingsScope: this.settingsScope,
-            autoScroll: true
-        }, options));
-
-        this._appSettings.on('cancel', this._hideSettings, this);
-        this._appSettings.on('save', this._onSettingsSaved, this);
-        if (this.isExternal()){
-            if (this.down('#settings_box').getComponent(this._appSettings.id)==undefined){
-                this.down('#settings_box').add(this._appSettings);
-            }
-        } else {
-            this.hide();
-            this.up().add(this._appSettings);
-        }
-        return this._appSettings;
-    },
-    _onSettingsSaved: function(settings){
-        Ext.apply(this.settings, settings);
-        this._hideSettings();
-        this.onSettingsUpdate(settings);
-    },
+    
     //onSettingsUpdate:  Override
     onSettingsUpdate: function (settings){
         this.logger.log('onSettingsUpdate',settings);
-        Ext.apply(this, settings);
+        this._initializeWorkspaceSettingsHash(settings);
+    },
 
-        this._addSelectors(this.down('#selector_box'));
+    /**
+     * Update the settings for this app in preferences.
+     * Provide a settings hash and this will update existing prefs or create new prefs.
+     * @param options.settings the settings to create/update
+     * @param options.success called when the prefs are loaded
+     * @param options.scope scope to call success with
+     */
+    updateSettingsValues: function(options) {
 
-        this.down('#create_button').setDisabled(false);
-        
-        this._gatherData(settings);
-    }
+        Rally.data.PreferenceManager.update(Ext.apply(this._getAppSettingsLoadOptions(), {
+            requester: this,
+            settings: options.settings,
+            success: function(updatedSettings) {
+                Ext.apply(this.settings, updatedSettings);
+
+                if (options.success) {
+                    options.success.call(options.scope);
+                }
+            },
+            scope: this
+        }));
+    },
 });
