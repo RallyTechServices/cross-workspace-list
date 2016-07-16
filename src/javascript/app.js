@@ -311,21 +311,27 @@ Ext.define("cross-workspace-list", {
                     items: [{
                         xtype: 'bulkmenuitemxworkspacecopy' ,
                         linkField: this.getLinkField(),
-                        typesToCopy: CArABU.technicalservices.WorkspaceSettingsUtility.getCopyableTypes(type, this.getWorkspaceSettingsHash(),this.getContext()),
+                        typesToCopy: CArABU.technicalservices.WorkspaceSettingsUtility.getCopyableTypes(type, this.getContext()),
                         copyFields: CArABU.technicalservices.WorkspaceSettingsUtility.copyFields,
                         workspaceSettings: this.getWorkspaceSettingsHash(),
                         context: this.getContext()
                     },{
                         xtype: 'bulkmenuitemxworkspacedeepcopy' ,
                         linkField: this.getLinkField(),
-                        typesToCopy: CArABU.technicalservices.WorkspaceSettingsUtility.getCopyableTypes(type, this.getWorkspaceSettingsHash(),this.getContext()),
+                        typesToCopy: CArABU.technicalservices.WorkspaceSettingsUtility.getCopyableTypes(type, this.getContext()),
                         copyFields: CArABU.technicalservices.WorkspaceSettingsUtility.copyFields,
                         workspaceSettings: this.getWorkspaceSettingsHash(),
                         context: this.getContext()
                     }]
                 }
             },
-            //plugins: this._getPlugins(),
+            plugins: [{
+                ptype: 'rallygridboardfieldpicker',
+                headerPosition: 'left',
+                modelNames: [type],
+                stateful: true,
+                stateId: this.getContext().getScopedStateId('columns')
+            }],
             height: this.getHeight()
         });
     },
@@ -340,8 +346,19 @@ Ext.define("cross-workspace-list", {
                     this.logger.log('syncerror',error);
                     Rally.ui.notify.Notifier.showError({message: error});
                 },
-                synccomplete: function(records){
-                    this.logger.log('synccomplete',records);
+                synccomplete: function(syncedRecords, unsyncedRecords, syncErrors){
+                    this.logger.log('synccomplete',syncedRecords, unsyncedRecords, syncErrors);
+                    var successfulRecords = syncedRecords && syncedRecords.length,
+                        totalRecords = sourceRecords.length;
+                    if (successfulRecords !== totalRecords){
+                        var msg = Ext.String.format("{0} of {1} records synced successfully.<br/><br/>Failures:<br/>",successfulRecords, totalRecords);
+                        for (var i =0; i< unsyncedRecords.length; i++){
+                            msg += Ext.String.format("[{0}] {1}<br/>", unsyncedRecords[i].get('_refObjectName'),syncErrors[i])
+                        }
+                        Rally.ui.notify.Notifier.showWarning({message: msg, allowHTML: true});
+                    } else {
+                        Rally.ui.notify.Notifier.show({message: Ext.String.format("All {0} records synced successfully.", successfulRecords)});
+                    }
                 },
                 syncstatus: function(status){
                     this.logger.log('syncstatus',status);
@@ -389,13 +406,11 @@ Ext.define("cross-workspace-list", {
      * @param options.scope scope to call success with
      */
     updateSettingsValues: function(options) {
-        console.log('---settings updatesettingsvalues options', options);
 
         Rally.data.PreferenceManager.update(Ext.apply(this._getAppSettingsLoadOptions(), {
             requester: this,
             settings: options.settings,
             success: function(updatedSettings) {
-                console.log('---settings updatesettingsvalues', updatedSettings, options.settings);
                 Ext.apply(this.settings, updatedSettings);
 
                 if (options.success) {

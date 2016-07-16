@@ -1,7 +1,8 @@
 #Cross Workspace List
 
 ###Requirements for app to run:
-* Link Field needs to be the same name for all types in the workspace.
+* Link Field needs to be the same name for all copyable types in the workspace.
+* Copyable types are:  Portfolio Item, User Story and Task
 
 ### List of fields that will be synced and copied with this app: 
 

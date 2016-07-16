@@ -3,12 +3,12 @@
 <head>
     <title>Cross Workspace List</title>
     <!--  (c) 2016 CA Technologies.  All Rights Reserved. -->
-    <!--  Build Date: Tue Jul 12 2016 18:02:28 GMT-0600 (MDT) -->
+    <!--  Build Date: Sat Jul 16 2016 17:45:55 GMT-0600 (MDT) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Tue Jul 12 2016 18:02:28 GMT-0600 (MDT)";
+        var APP_BUILD_DATE = "Sat Jul 16 2016 17:45:55 GMT-0600 (MDT)";
         var BUILDER = "kcorkan";
-        var CHECKSUM = 586133938303;
+        var CHECKSUM = 420460516652;
     </script>
     
     <script type="text/javascript" src="/apps/2.1/sdk.js"></script>
@@ -945,19 +945,20 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
         this.logger.log('_copyStandaloneArtifacts', this.records);
 
         this.recordHash = {};
-        var destProjectRef = this.destinationProject.get('_ref');;
+        var destProjectRef = this.destinationProject.get('_ref'),
+            workspaceID = Rally.util.Ref.getOidFromRef(this.destinationProject.get('Workspace')._ref);
 
         var promises = [],
             records = this.sourceRecords,
             deferred = Ext.create('Deft.Deferred'),
             sourceWorkspaceName = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspaceName(),
             sourceProjectName = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentProjectName(),
-            linkField = CArABU.technicalservices.WorkspaceSettingsUtility.getLinkField(this.destinationProject.get('Workspace').ObjectID);
+            linkField = CArABU.technicalservices.WorkspaceSettingsUtility.getLinkField(workspaceID);
 
         Ext.Array.each(records, function(r){
             if (r.get('_type').toLowerCase() !== 'task'){
                 var overrides = {Project: destProjectRef};
-                overrides[linkField] = this._getLinkValue(r, sourceWorkspaceName,sourceProjectName);
+                overrides[linkField] = CArABU.technicalservices.WorkspaceSettingsUtility.getLinkValue(r, sourceWorkspaceName,sourceProjectName);
                 promises.push(this.copyArtifact(r, overrides));
             }
         }, this);
@@ -978,11 +979,12 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
             promises = [],
             deferred = Ext.create('Deft.Deferred'),
             destProjectRef = this.destinationProject.get('_ref'),
+            destWorkspaceID = Rally.util.Ref.getOidFromRef(this.destinationProject.get('Workspace')._ref),
             sourceWorkspaceName = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspaceName(),
             sourceProjectName = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentProjectName(),
-            linkField = CArABU.technicalservices.WorkspaceSettingsUtility.getLinkField(this.destinationProject.get('Workspace').ObjectID);
+            linkField = CArABU.technicalservices.WorkspaceSettingsUtility.getLinkField(destWorkspaceID);
 
-        this.logger.log('_copyTasks', linkField);
+        this.logger.log('_copyTasks', linkField, destWorkspaceID);
         Ext.Array.each(this.sourceRecords, function(r){
             if (r.get('_type').toLowerCase() === 'task'){
                 //find parent
@@ -991,7 +993,7 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
                     me.logger.log('parentRef', parent);
                     var overrides = {Project: destProjectRef};
                     overrides["WorkProduct"] = parent;
-                    overrides[linkField] = this._getLinkValue(r,sourceWorkspaceName,sourceProjectName);
+                    overrides[linkField] = CArABU.technicalservices.WorkspaceSettingsUtility.getLinkValue(r,sourceWorkspaceName,sourceProjectName);
                     promises.push(function(){ return me.copyArtifact(r, overrides); });
                 }
             }
@@ -1022,7 +1024,7 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
         Ext.Array.each(this.sourceRecords, function(r){
             var sourceID = r.get('ObjectID'),
                 obj = this.recordHash[sourceID];
-            console.log('source',sourceID,obj, obj.destinationRecord, obj.destinationParent);
+
             if (obj && obj.destinationParent && obj.destinationRecord){
                  obj.destinationRecord.set(obj.destinationParentField, obj.destinationParent );
                 updateRecords.push(obj.destinationRecord);
@@ -1030,6 +1032,25 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
         }, this);
 
         this.logger.log('_stitchArtifacts', updateRecords);
+
+        //if (updateRecords && updateRecords.length > 0) {
+        //
+        //    var promises = [], me = this;
+        //    Ext.Array.each(updateRecords, function (rec) {
+        //        promises.push(function() { return me._saveRecord(rec);});
+        //    });
+        //    Deft.Chain.sequence(promises).then({
+        //        success: function () {
+        //            deferred.resolve();
+        //        },
+        //        failure: function (msg) {
+        //            deferred.reject(msg);
+        //        },
+        //        scope: this
+        //    });
+        //} else {
+        //    deferred.resolve();
+        //}
         if (updateRecords && updateRecords.length > 0){
             var bulkUpdateStore = Ext.create('Rally.data.wsapi.batch.Store', {
                 data: updateRecords
@@ -1051,6 +1072,20 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
 
         return deferred;
     },
+    _saveRecord: function(record){
+        var deferred = Ext.create('Deft.Deferred');
+
+        record.save({
+            callback: function(result, operation){
+                if (operation.wasSuccessful()){
+                    deferred.resolve();
+                } else {
+                    deferred.reject("Failed to save record: " + operation && operation.error && operation.error.errors.join(','));
+                }
+            }
+        });
+        return deferred;
+    },
     _updateSourceLinks: function(){
         var sourceLinkField = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspaceLinkField(),
             deferred = Ext.create('Deft.Deferred'),
@@ -1059,7 +1094,7 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
             updates = [];
 
         Ext.Object.each(this.recordHash, function(key, obj){
-            var sourceLinkValue = this._getLinkValue(obj.destinationRecord,workspaceName,projectName);
+            var sourceLinkValue = CArABU.technicalservices.WorkspaceSettingsUtility.getLinkValue(obj.destinationRecord,workspaceName,projectName);
             obj.sourceRecord.set(sourceLinkField, sourceLinkValue);
             updates.push(obj.sourceRecord);
         }, this);
@@ -1158,6 +1193,7 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
         this.fireEvent('copystatus', Ext.String.format("Copying {0} of {1} artifacts.", this.copiedCount, this.totalCount));
 
         var fields = this._getFieldsToCopy(record, overrides);
+        console.log('fieldstocopy', fields);
 
         Ext.create(model, fields).save({
             callback: function(result, operation){
@@ -1178,6 +1214,7 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
     _getFieldsToCopy: function(record, overrides){
         var sourceFields = record.getFields(),
             sourceType = record.get('_type'),
+            destWorkspaceRef = this.destinationProject.get('Workspace')._ref,
             copyableFields = _.filter(sourceFields, this._fieldIsCopyable, this),
             fieldHash = {};
 
@@ -1191,7 +1228,7 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
                 val = val._refObjectName;
             }
 
-            var mappedVal = this._getMappedValue(val, f.name,  sourceType);
+            var mappedVal = CArABU.technicalservices.WorkspaceSettingsUtility.getMappedValue(record, f.name, destWorkspaceRef);
             this.logger.log('copying fields', f.name, val, mappedVal);
 
             this.logger.log('field', f.name, f.attributeDefinition.AttributeType, val,record.get(f.name), mappedVal);
@@ -1207,34 +1244,12 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
         this.logger.log('fieldHash', fieldHash);
         return fieldHash;
     },
-    _getMappedValue: function(sourceValue, fieldName, sourceType){
-        var destWorkspaceRef = this.destinationProject.get('Workspace')._ref,
-        valueMap = CArABU.technicalservices.WorkspaceSettingsUtility.getValueMap(destWorkspaceRef, sourceType, fieldName);
-        this.logger.log('_getMappedValue', sourceValue, valueMap, destWorkspaceRef, sourceType, fieldName);
-        if (!valueMap){
-            return sourceValue;
-        }
-
-        if (sourceValue){
-            return valueMap[sourceValue] || null;
-        }
-        return null;
-    },
     _fieldIsCopyable: function(field){
 
-        if (Ext.Array.contains(this.copyFields, field.name)){
+        if (Ext.Array.contains(this.copyFields, field.name) && !field.readOnly){
             return true;
         }
         return false;
-    },
-    _getLinkValue: function(artifact, workspaceName, projectName){
-        console.log('_getLinkValue', workspaceName, projectName);
-        var link_text = Ext.String.format('[{0}][{1}] {2}',workspaceName, projectName, artifact.get('FormattedID'));
-
-        return Rally.nav.DetailLink.getLink({
-            record: artifact,
-            text: link_text
-        });
     }
 
 });
@@ -1380,7 +1395,7 @@ Ext.define('CArABU.technicalservices.ArtifactLoader',{
 
 
     _getArtifactFetchList: function(){
-        return this.fetchFields.concat(['Parent','WorkProduct','PortfolioItem','ObjectID']);
+        return this.fetchFields.concat(['Parent','WorkProduct','PortfolioItem','ObjectID','Workspace','LastUpdateDate']);
     }
 });
 
@@ -1390,11 +1405,6 @@ Ext.define('CArABU.technicalservices.ArtifactSyncer',{
         observable: 'Ext.util.Observable'
     },
 
-    fieldsToSync: {
-        hierarchicalrequirement: [],
-        task: [],
-        portfolioitem: []
-    },
     constructor: function(config){
         this.workspaceSettings = config.workspaceSettings;
         this.fetchFields = config.copyFields;
@@ -1409,42 +1419,41 @@ Ext.define('CArABU.technicalservices.ArtifactSyncer',{
         );
     },
     sync: function(sourceRecords){
-        var linkField = this.workspaceSettings.getLinkField();
+        var linkField = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspaceLinkField();
         this.syncedRecords = [];
         this.unsyncedRecords = [];
+        this.syncErrors = [];
 
+        var promises = [];
         Ext.Array.each(sourceRecords, function(r){
-            this.syncLinkedArtifact(r, linkField);
+            promises.push(this.syncLinkedArtifact(r, linkField));
         }, this);
+        Deft.Promise.all(promises).then({
+            success: function(){
+                this.fireEvent('synccomplete', this.syncedRecords, this.unsyncedRecords, this.syncErrors);
+            },
+            scope: this
+        });
 
     },
     syncLinkedArtifact: function(sourceRecord, linkField){
+        var deferred = Ext.create('Deft.Deferred');
         var link = sourceRecord.get(linkField),
             matches = /<a.*href=".*\/#\/(\d+).*\/detail\/.*\/(\d+)">(.*)<\/a>/.exec(link),
-            objectID = null,
-            projectOid = null,
-            store_context = null,
-            ref = null;
+            objectID = CArABU.technicalservices.WorkspaceSettingsUtility.getObjectIDFromLinkValue(link),
+            store_context = CArABU.technicalservices.WorkspaceSettingsUtility.getContextFromLinkValue(link);
 
-        if (!matches){
-            this.logger.log('No matches for artifact ' + sourceRecord.get('FormattedID') ,link, matches);
+        if (!objectID || !store_context){
+            this.logger.log('No context or matches for artifact found:  ' + sourceRecord.get('FormattedID') ,link, matches);
             this.unsyncedRecords.push(sourceRecord);
-            return;
+            this.syncErrors.push('No context (workspace or project) or matches.  Please verify that the destination workpsce and project are configured via the App settings and the object exists.');
+            deferred.resolve();
+            return deferred;
         }
 
-        if (matches){
-            objectID = matches[2] || null;
-            projectOid =matches[1] || null;
-            store_context = this._getLinkedContext(projectOid);
-        }
+        var modelName = CArABU.technicalservices.WorkspaceSettingsUtility.getDestinationModelType(sourceRecord.get('_type'), store_context);
+        this.logger.log('syncLinkedArtifact', objectID, store_context, modelName);
 
-        if (store_context.workspace == null || store_context.project==null){
-            this.logger.log('Context not found for ' + sourceRecord.get('FormattedID'), projectOid, store_context);
-            this.unsyncedRecords.push(sourceRecord);
-            return;
-        }
-        var modelName = this._getDestinationModelType(sourceRecord.get('_type'), store_context);
-        console.log('_getLinkedArtifactInfo', objectID,store_context, modelName);
         Rally.data.ModelFactory.getModel({
             type: modelName,
             context: store_context,
@@ -1453,11 +1462,18 @@ Ext.define('CArABU.technicalservices.ArtifactSyncer',{
                     fetch: this.fetchFields,
                     callback: function(destinationRecord, operation) {
                         if(operation.wasSuccessful()) {
-                            this._syncRecord(sourceRecord, destinationRecord);
                             this.logger.log('Success', destinationRecord.get('LastUpdateDate'), sourceRecord.get('LastUpdateDate'));
+                            this._syncRecord(sourceRecord, destinationRecord).then({
+                                success: function(){
+                                    deferred.resolve();
+                                }
+                            });
                         } else {
                             this.unsyncedRecords.push(sourceRecord);
-                            this.logger.log('FAILURE', operation);
+                            var msg = "FAILURE to load linked record [" + objectID + "]: " + operation.error.errors.join(',');
+                            this.logger.log('FAILURE', msg, operation);
+                            this.syncErrors.push(msg);
+                            deferred.resolve();
                         }
                     },
                     scope: this
@@ -1465,13 +1481,18 @@ Ext.define('CArABU.technicalservices.ArtifactSyncer',{
             },
             failure: function(){
                 this.unsyncedRecords.push(sourceRecord);
-                this.logger.log('FAILURE to load Model ' + modelName);
+                var msg = 'FAILURE to load Model ' + modelName;
+                this.logger.log('FAILURE', msg);
+                this.fireEvent('syncerror', msg);
+                this.syncErrors.push(msg);
+                deferred.resolve();
             },
             scope: this
         });
-
+        return deferred;
     },
     _syncRecord: function(sourceRecord, destinationRecord){
+        var deferred = Ext.create('Deft.Deferred');
         var type = sourceRecord.get('_type');
         this.logger.log('_syncRecord', sourceRecord, destinationRecord.get('LastUpdateDate'), sourceRecord.get('LastUpdateDate'), type);
 
@@ -1483,55 +1504,32 @@ Ext.define('CArABU.technicalservices.ArtifactSyncer',{
             syncTarget= sourceRecord;
         }
 
-        Ext.Array.each(this.workspaceSettings.getSyncFields(type), function(f){
-            var val = syncSource.get(f);
-            val = this.workspaceSettings.getMappedValue(f,syncSource, syncTarget);
+        Ext.Array.each(CArABU.technicalservices.WorkspaceSettingsUtility.getSyncFields(type), function(f){
+            var val = CArABU.technicalservices.WorkspaceSettingsUtility.getMappedValue(syncSource, f, syncTarget.get('Workspace')._ref);
+            if (Ext.isObject(val)){
+                val = val._ref;
+            }
             syncTarget.set(f,val);
         }, this);
+
         syncTarget.save({
             callback: function(record, operation){
-                this.logger.log('syncTarget saved', record);
-                this.syncedRecords.push(sourceRecord);
+                if (operation.wasSuccessful()){
+                    this.logger.log('syncTarget saved', record);
+                    this.syncedRecords.push(sourceRecord);
+                    deferred.resolve();
+                } else {
+                    var msg = Ext.String.format("Failed to sync record {0}: {1}",sourceRecord.get('FormattedID'), operation.error.errors.join(','));
+                    this.logger.log('syncTarget failed', msg);
+                    this.unsyncedRecords.push(sourceRecord);
+                    this.syncErrors.push(msg);
+                    deferred.resolve();
+                }
             },
             scope:this
         });
 
-
-    },
-    _getDestinationModelType: function(sourceType, destinationContext){
-
-        if (this._isPortfolioItem(sourceType)) {
-            //TODO get the mapped portfolio itme type
-            return sourceType;
-        }
-        return sourceType;
-
-    },
-    _isPortfolioItem: function(type){
-        return /portfolioitem/.test(type.toLowerCase());
-    },
-    _getLinkedContext: function(projectOid){
-        var workspace = this.workspaceSettings.getWorkspaceForProject(projectOid);
-        return {workspace: '/workspace/' + workspace, project: '/project/' + Number(projectOid)};
-    },
-    _updateArtifact: function(artifact_to_be_updated, source_artifact) {
-
-        _.each(this.fieldsToCopy, function (f) {
-            artifact_to_be_updated.set(f, this._getFieldValue(source_artifact, f));
-        }, this);
-
-        this.logger.log('_updateArtifact (dirty)', artifact_to_be_updated, source_artifact, this.fieldsToCopy);
-        artifact_to_be_updated.save({
-            scope: this,
-            callback: function (record, operation) {
-                this.logger.log('_updateArtifact callback returned',record, operation);
-                if (operation.wasSuccessful()) {
-                    this.fireEvent('artifactupdated', record);
-                } else {
-                    this.fireEvent('updateerror', this.buildErrorMessage(Ext.String.format('Error updating artifact {0}', artifact_to_be_updated.get('FormattedID')), operation));
-                }
-            }
-        });
+        return deferred;
     }
 
 });
@@ -2157,7 +2155,6 @@ Ext.define('CA.technicalservices.BulkMenuItem.xWorkspaceCopyBase', {
         }
     },
     _showOptions: function() {
-
         var dlg = Ext.create('CA.technicalservices.xWorkspaceCopyDialog',{
             title: "Select Destination Project",
             workspaceSettings: this.workspaceSettings,
@@ -2180,7 +2177,6 @@ Ext.define('CA.technicalservices.BulkMenuItem.xWorkspaceCopyBase', {
         });
     },
     _copyRecords: function(records, options){
-        console.log('options', options)
         var copier = Ext.create('CArABU.technicalservices.ArtifactCopier',{
             workspaceSettings: this.workspaceSettings,
             copyFields: this.copyFields,
@@ -2195,6 +2191,7 @@ Ext.define('CA.technicalservices.BulkMenuItem.xWorkspaceCopyBase', {
                     console.log('copystatus',msg);
                 },
                 copycomplete: function(){
+                    console.log('copycomplete',  records);
                     this.onSuccess(records, [], []);
                 },
                 scope: this
@@ -2309,420 +2306,6 @@ Ext.define('CA.technicalservices.BulkMenuItem.xWorkspaceCopy', {
         return deferred;
     }
 });
-//(function() {
-//    var Ext = window.Ext4 || window.Ext;
-//
-//    /**
-//     * Manages reading and writing preferences for various scopes (app, workspace, project, user)
-//     *
-//     *     //load app preferences
-//     *     Rally.data.PreferenceManager.load({
-//     *         appID: this.getAppId(),
-//     *         success: function(prefs) {
-//     *             //process prefs
-//     *         }
-//     *     });
-//     *
-//     *     //save app preferences
-//     *     Rally.data.PreferenceManager.update({
-//     *         appID: this.getAppId(),
-//     *         settings: {
-//     *             foo: 'bar'
-//     *         },
-//     *         success: function(updatedRecords, notUpdatedRecords) {
-//     *             //yay!
-//     *         }
-//     *     });
-//     */
-//    Ext.define('Rally.data.PreferenceManager', {
-//        mixins: ['Rally.Messageable'],
-//
-//        requires: [
-//            'Rally.data.BulkRecordUpdater',
-//            'Rally.util.Ref',
-//            'Rally.state.ScopedStateUtil'
-//        ],
-//
-//        singleton: true,
-//
-//        clientMetrics: [
-//            {
-//                beginMethod: 'load',
-//                endMethod: '_onPrefLoad',
-//                description: 'preference loaded'
-//            },
-//            {
-//                beginMethod: 'update',
-//                endMethod: '_onPrefUpdate',
-//                description: 'preference updated'
-//            },
-//            {
-//                beginMethod: 'remove',
-//                endMethod: '_onPrefRemove',
-//                description: 'preference removed'
-//            }
-//        ],
-//
-//        /**
-//         * @property
-//         *
-//         * Object used to cache preferences
-//         */
-//        cacheProvider: undefined,
-//
-//        /**
-//         * Load preferences for the specified scope
-//         * @param {Object} options
-//         * @param {String} [options.appID] the ID of the app to load preferences for
-//         * @param {Rally.util.Ref/String} [options.project] The project to load preferences for
-//         * @param {Rally.util.Ref/String} [options.workspace] The workspace to load preferences for
-//         * @param {Boolean/String} [options.filterByUser=false] Set to the user that you want to load preferences for, or true for the current user.  A value of null is also valid.
-//         * @param {String} [options.filterByName] the Name of the pref to filter by. Useful when updating a single pref instead of several settings.
-//         * @param {Ext.util.Filter[]} [options.additionalFilters] A collection of filters for additional filtering
-//         * @param {Function} [options.success] called when the prefs are loaded
-//         * @param {Object} [options.scope] scope to call success with
-//         * @param {Boolean} [options.cache] True if you want to fetch from the local storage
-//         */
-//        load: function(options) {
-//            var prefs = this._shouldUseCache(options) ? this._getNamedCachedPref(options) : null,
-//                deferred = Ext.create('Deft.Deferred');
-//
-//            if (!Ext.isEmpty(prefs) && _.size(prefs)) {
-//                this._onPrefLoad(prefs, options);
-//                deferred.resolve(prefs);
-//            } else {
-//                this._buildPrefStore(options).load({
-//                    callback: function(records) {
-//                        var prefs = this._convertRecordsToCachedPrefValue(records);
-//
-//                        if (this._shouldUseCache(options)) {
-//                            this._setCachedPref(prefs, options);
-//                        }
-//
-//                        this._onPrefLoad(prefs, options);
-//                        deferred.resolve(prefs);
-//                    },
-//                    scope: this
-//                });
-//            }
-//
-//            return deferred.promise;
-//        },
-//
-//        /**
-//         * Update settings for a preference
-//         * Provide a settings hash and this will update existing prefs or create new prefs.
-//         * @param {Object} options
-//         * @param {Object} options.settings the settings to create/update
-//         * @param {String} [options.appID] the ID of the app to save the preference for
-//         * @param {Rally.util.Ref/String} [options.project] the project to save the preference for
-//         * @param {Rally.util.Ref/String} [options.workspace] the workspace to save the preference for
-//         * @param {Boolean/String} [options.filterByUser=false] Set to the user that you want to load preferences for, or true for the current user.  A value of null is also valid.
-//         * @param {String} [options.filterByName] the Name of the pref to filter by. Useful when updating a single pref instead of several settings.
-//         * @param {Ext.util.Filter[]} [options.additionalFilters] A collection of filters for additional filtering
-//         * @param {Function} [options.success] called when the prefs are finished being updated
-//         * @param {Object} [options.scope] scope to call success with
-//         * @param {Object} [options.cache] true if you want to fetch from the local storage
-//         */
-//        update: function(options) {
-//            var store = this._buildPrefStore(options),
-//                updateOptions = options;
-//
-//            return store.load().then({
-//                success: function() {
-//                    return this._updatePreferences(store, updateOptions);
-//                },
-//                scope: this
-//            }).then({
-//                success: function(records) {
-//                    this._onPrefUpdate(records, updateOptions);
-//                    return records;
-//                },
-//                scope: this
-//            });
-//        },
-//
-//        /**
-//         * Remove a preference by name
-//         * @param {Object} options
-//         * @param {String} options.appID the ID of the app to remove the pref for
-//         * @param {String} options.filterByName name of the pref
-//         * @param {Rally.util.Ref/String} [options.project] the project to load preferences for
-//         * @param {Rally.util.Ref/String} [options.workspace] the workspace to load preferences for
-//         * @param {Ext.util.Filter[]} [options.additionalFilters] A collection of filters for additional filtering
-//         * @param {Function} [options.success] called when removal is finished
-//         * @param {Object} [options.scope] scope to call success with
-//         */
-//        remove: function(options) {
-//            if (options.name && !options.filterByName) {
-//                // support deprecated option
-//                options.filterByName = options.name;
-//            }
-//
-//            if (!options.filterByName) {
-//                Ext.Error.raise('filterByName is a required parameter for Rally.data.PreferenceManager#remove');
-//            }
-//
-//            this._buildPrefStore(options).load({
-//                callback: function(records) {
-//                    var pref = records[0];
-//                    if (pref) {
-//                        pref.destroy({
-//                            success: function() {
-//                                this._onPrefRemove(options);
-//                            },
-//                            scope: this
-//                        });
-//                    } else {
-//                        this._onPrefRemove(options);
-//                    }
-//                },
-//                scope: this
-//            });
-//
-//        },
-//
-//        _onPrefLoad: function(prefs, options) {
-//            if (options.success) {
-//                options.success.call(options.scope, prefs);
-//            }
-//        },
-//
-//        /**
-//         * @private
-//         *
-//         * Prefs can be cached with or without a name filter.
-//         * When the cached preference is updated, we need to make sure
-//         * both the filtered and unfiltered cached preferences are updated.
-//         * You can have multiple cached entries for the same preference because
-//         * the key is unique to the options passed in to PreferenceManager.
-//         */
-//        _onPrefUpdate: function(records, options) {
-//            if (options.success) {
-//                options.success.call(options.scope, records);
-//            }
-//            if (!_.isEmpty(records)) {
-//                this.publish(Rally.Message.preferenceUpdated, records);
-//            }
-//        },
-//
-//        _onPrefRemove: function(options) {
-//            if (options.filterByName) {
-//                this._removeCachedPref(options);
-//            } else {
-//                Ext.Error.raise('filterByName is a required parameter for Rally.data.PreferenceManager#remove');
-//            }
-//
-//            if (options.success) {
-//                options.success.call(options.scope);
-//            }
-//            this.publish(Rally.Message.preferenceRemoved);
-//        },
-//
-//        _convertRecordsToCachedPrefValue: function(records) {
-//            var prefs = {};
-//            if(records) {
-//                Ext.Array.forEach(records, function(record) {
-//                    var existingPref = prefs[record.get('Name')];
-//                    if (!existingPref) {
-//                        prefs[record.get('Name')] = record.get('Value');
-//                    }
-//                });
-//            }
-//            return prefs;
-//        },
-//        //
-//        _updatePreferences: function(store, options) {
-//            Ext.Object.each(options.settings, function(settingName, settingValue) {
-//                var existingPref = store.findExactRecord('Name', settingName);
-//
-//                if (Ext.isObject(settingValue)){
-//                    settingValue = Ext.JSON.encode(settingValue);
-//                }
-//
-//                if (existingPref) {
-//                    existingPref.set('Value', settingValue);
-//                } else {
-//                    var pref = {
-//                        Name: settingName,
-//                        Value: settingValue,
-//                        Project: Rally.util.Ref.getRelativeUri(options.project) || null
-//                    };
-//                    if (options.appID) {
-//                        pref.AppId = options.appID;
-//                    }
-//                    if (options.filterByUser) {
-//                        pref.User = this._getUserRef(options.filterByUser);
-//                    }
-//                    if(options.workspace) {
-//                        pref.Project = null;
-//                        pref.Workspace = Rally.util.Ref.getRelativeUri(options.workspace);
-//                    }
-//                    store.add(pref);
-//                }
-//
-//            }, this);
-//
-//            var deferred = Ext.create('Deft.Deferred');
-//            var recordsToUpdate = store.getNewRecords().concat(store.getUpdatedRecords());
-//
-//            Rally.data.BulkRecordUpdater.updateRecords({
-//                records: recordsToUpdate,
-//                success: function() {
-//                    var cachedPrefValue = this._convertRecordsToCachedPrefValue(store.getRecords());
-//                    this._setCachedPref(cachedPrefValue, options);
-//                    deferred.resolve(recordsToUpdate);
-//                },
-//                scope: this
-//            });
-//
-//            return deferred.promise;
-//        },
-//
-//        _getUserRef: function(filterByUser) {
-//            var user = (filterByUser === true) ? this._getCurrentUserRef() : filterByUser;
-//            return Rally.util.Ref.getRelativeUri(user);
-//        },
-//
-//        _buildPrefStore: function(options) {
-//            var filters = [];
-//            if (options.appID) {
-//                filters.push({
-//                    property: 'AppId',
-//                    value: options.appID
-//                });
-//            }
-//            if (options.hasOwnProperty('filterByUser')) {
-//                filters.push({
-//                    property: 'User',
-//                    value: this._getUserRef(options.filterByUser) || null
-//                });
-//            }
-//            if (options.filterByName) {
-//                filters.push({
-//                    property: 'Name',
-//                    value: options.filterByName
-//                });
-//            }
-//            if (options.hasOwnProperty('project')) {
-//                filters.push({
-//                    property: 'Project',
-//                    value: Rally.util.Ref.getRelativeUri(options.project) || null
-//                });
-//            }
-//            if (options.hasOwnProperty('workspace')) {
-//                filters.push({
-//                    property: 'Workspace',
-//                    value: Rally.util.Ref.getRelativeUri(options.workspace) || null
-//                });
-//            }
-//
-//            filters = filters.concat(options.additionalFilters || []);
-//
-//            return Ext.create('Rally.data.wsapi.Store', {
-//                requester: options.requester,
-//                model: Ext.identityFn('preference'),
-//                filters: filters,
-//                context: Rally.environment.getContext().getDataContext()
-//            });
-//        },
-//
-//        _getCurrentUserRef: function() {
-//            return '/user/' + Rally.environment.getContext().getUser().ObjectID;
-//        },
-//
-//        _getUnNamedOptions: function(options) {
-//            var unFilteredOpts = Ext.merge({}, options);
-//            delete unFilteredOpts.filterByName;
-//            return unFilteredOpts;
-//        },
-//
-//        _buildCacheKey: function(options) {
-//            if (!this.scopedStateUtil) {
-//                this.scopedStateUtil = Ext.create('Rally.state.ScopedStateUtil');
-//            }
-//
-//            return this.scopedStateUtil.getScopeString(options);
-//        },
-//
-//        _getCachedPref: function(options) {
-//            if (this.cacheProvider) {
-//                return this.cacheProvider.get(this._buildCacheKey(options));
-//            }
-//        },
-//
-//        _getNamedCachedPref: function(options) {
-//            var prefs = this._getCachedPref(options);
-//
-//            if (!Ext.isEmpty(prefs) && options.filterByName) {
-//                var namedPrefs = {};
-//                if (prefs.hasOwnProperty(options.filterByName)) {
-//                    namedPrefs[options.filterByName] = prefs[options.filterByName];
-//                }
-//                return namedPrefs;
-//            }
-//
-//            return prefs;
-//        },
-//
-//        _setCachedPref: function(prefs, options) {
-//            if (this._shouldUseCacheOrPreferenceIsAlreadyCached(options)) {
-//                if (Ext.isEmpty(prefs)) {
-//                    this._removeCachedPref(options);
-//                } else {
-//                    var oldCacheValue = this._getCachedPref(options) || {},
-//                        newCacheValue = Ext.merge(oldCacheValue, prefs);
-//
-//                    this.cacheProvider.set(this._buildCacheKey(options), newCacheValue);
-//                }
-//            }
-//        },
-//
-//        _removeCachedPref: function(options) {
-//            if (this.cacheProvider) {
-//                if (options.filterByName) {
-//                    this._removeNamedCachedPref(options);
-//                } else {
-//                    this.cacheProvider.clear(this._buildCacheKey(options));
-//                }
-//            }
-//        },
-//
-//        _removeNamedCachedPref: function(options) {
-//            var cachedPrefs = this._getCachedPref(options);
-//
-//            if (!Ext.isEmpty(cachedPrefs)) {
-//                delete cachedPrefs[options.filterByName];
-//                this.cacheProvider.set(this._buildCacheKey(options), cachedPrefs);
-//            }
-//        },
-//
-//        _shouldUseCache: function(options) {
-//            return this._isFilteredByUser(options) &&
-//                this._isCacheEnabled(options) &&
-//                !this._hasAdditionalFilters(options) &&
-//                this.cacheProvider;
-//        },
-//
-//        _isFilteredByUser: function(options) {
-//            return options && options.filterByUser;
-//        },
-//
-//        _isCacheEnabled: function(options) {
-//            return (options && options.hasOwnProperty('cache')) ? options.cache : true;
-//        },
-//
-//        _shouldUseCacheOrPreferenceIsAlreadyCached: function(options) {
-//            return this._shouldUseCache(options) || (this.cacheProvider && this.cacheProvider.get(this._buildCacheKey(options)));
-//        },
-//
-//        _hasAdditionalFilters: function(options) {
-//            return options && !Ext.isEmpty(options.additionalFilters);
-//        }
-//    });
-//})();
-//
-
 Ext.define('CrossWorkspaceCopier.Settings',{
     singleton: true,
 
@@ -2960,17 +2543,22 @@ Ext.define('CArABU.technicalservices.WorkspaceConfigurationDialog', {
             padding: '0 0 10px 0',
             items: this.getWorkspaceSelectorItems()
         });
+
+        if (this.selectedWorkspaceStore){
+            CArABU.technicalservices.WorkspaceSettingsUtility.initializeWorkspaceConfiguration(this.selectedWorkspaceStore).then({
+                success: this._initializeDialog,
+                failure: this._initializeDialogWithError,
+                scope: this
+            });
+        }
     },
     _done: function(){
         var linkField = this.down('#cb-linkField') && this.down('#cb-linkField').getValue(),
             intro = this.down('#intro-text');
-        console.log('intro', intro, linkField);
 
         this._saveMappings();
 
         this.selectedWorkspaceStore.linkField = linkField;
-
-      //  this.selectedWorkspaceStore.setLinkField(linkField);
 
         var validationErrors = CArABU.technicalservices.WorkspaceSettingsUtility.validateSetting(this.selectedWorkspaceStore,this._getTotalPortfolioItemLevels());
      //  var validationErrors = this.selectedWorkspaceStore.validateConfiguration(this._getTotalPortfolioItemLevels());
@@ -2994,25 +2582,7 @@ Ext.define('CArABU.technicalservices.WorkspaceConfigurationDialog', {
             disabled = this.selectedWorkspaceStore && this.selectedWorkspaceStore.ObjectID > 0,
             linkValue = this.selectedWorkspaceStore && this.selectedWorkspaceStore.linkField || null;
 
-        return [{
-            xtype:'rallycombobox',
-            itemId: 'cb-workspace',
-            fieldLabel: 'Workspace',
-            labelAlign: 'right',
-            store: Ext.create('Rally.data.custom.Store',{ data: this.workspaces }),
-            displayField: 'Name',
-            valueField: 'ObjectID',
-            allowNoEntry: true,
-            noEntryText: 'Select a Workspace...',
-            width: width,
-            value: this.selectedWorkspaceStore && this.selectedWorkspaceStore.ObjectID,
-            disabled: disabled,
-            listeners: {
-                scope: this,
-                select: this._initializeWorkspace,
-                ready: this._initializeWorkspace
-            }
-        },{
+        var items = [{
             xtype: 'rallycombobox',
             itemId: 'cb-linkField',
             fieldLabel: 'Link Field',
@@ -3026,11 +2596,40 @@ Ext.define('CArABU.technicalservices.WorkspaceConfigurationDialog', {
             disabled: true
         }];
 
+        if (disabled){
+            items.unshift({
+                xtype: 'rallytextfield',
+                disabled: true,
+                fieldLabel: 'Workspace',
+                labelAlign: 'right',
+                value: this.selectedWorkspaceStore.Name,
+                width: width
+            });
+        } else {
+            items.unshift({
+                xtype:'rallycombobox',
+                itemId: 'cb-workspace',
+                fieldLabel: 'Workspace',
+                labelAlign: 'right',
+                store: Ext.create('Rally.data.custom.Store',{ data: this.workspaces }),
+                displayField: 'Name',
+                valueField: 'ObjectID',
+                allowNoEntry: true,
+                noEntryText: 'Select a Workspace...',
+                width: width,
+                listeners: {
+                scope: this,
+                    select: this._initializeWorkspace,
+                    ready: this._initializeWorkspace
+            }
+            });
+        }
+
+        return items;
+
     },
     _initializeWorkspace: function(cb){
-        if (cb && cb.disabled){
-            this._initializeDialog(this.selectedWorkspaceStore);
-        } else if (cb && cb.getRecord() && cb.getRecord().get('ObjectID') > 0){
+        if (cb && cb.getRecord() && cb.getRecord().get('ObjectID') > 0){
             var workspaceRef = cb.getRecord().get('_ref'),
                 workspaceOid = cb.getRecord().get('ObjectID'),
                 workspaceName = cb.getRecord().get('Name');
@@ -3098,12 +2697,11 @@ Ext.define('CArABU.technicalservices.WorkspaceConfigurationDialog', {
                     mapToName = r.get('mapTo'),
                     mapToValue = null;
 
-                Ext.Array.each(otherWorkspace.portfolioItemStates[mappedType], function(state){
-                    if (mapToName === state.get('StringValue')){
-                        mapToValue = state.get('_ref');
-                    }
-                });
+                if (_.has(otherWorkspace.portfolioItemStates[mappedType], mapToName)){
+                    mapToValue = mapToName;
+                }
 
+                mappedType = mappedType.toLowerCase();
                 mappings[mappedType] = mappings[mappedType] || {};
                 mappings[mappedType][mappedField] = mappings[mappedType][mappedField] || {};
                 mappings[mappedType][mappedField][mapFromValue] = mapToValue;
@@ -3112,22 +2710,7 @@ Ext.define('CArABU.technicalservices.WorkspaceConfigurationDialog', {
             otherWorkspace.mappings = mappings;
         }
     },
-    _getStateNameFromValue: function(mappedStateRef, otherWorkspace, type, defaultStateName){
-        var states = otherWorkspace.portfolioItemStates[type],
-            stateName = null;
 
-        Ext.Array.each(states, function(s){
-            if (s.get('_ref') === mappedStateRef){
-                stateName = s.get('StringValue');
-                return false;
-            }
-            if (s.get('StringValue') === defaultStateName){
-                stateName = defaultStateName;
-            }
-        });
-
-        return stateName;
-    },
     _buildMappingGrid: function(){
         var currentWorkspace = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspace(),
             otherWorkspace = this.selectedWorkspaceStore,
@@ -3135,18 +2718,15 @@ Ext.define('CArABU.technicalservices.WorkspaceConfigurationDialog', {
 
         var data = [];
         for (var i=0; i < totalPortfolioLevels; i++){
-            var type = currentWorkspace.portfolioItemTypes[i];
+            var type = currentWorkspace.portfolioItemTypes[i].toLowerCase();
 
-            Ext.Array.each(currentWorkspace.portfolioItemStates[type], function(state){
-                var stateName = state && state.get('StringValue').length > 0 && state.get('StringValue');
+            Ext.Object.each(currentWorkspace.portfolioItemStates[type], function(stateName, ref){
 
                 if (stateName) {
                     var mappedStateName = otherWorkspace.mappings &&
                         otherWorkspace.mappings[type] &&
                         otherWorkspace.mappings[type]['State'] &&
                         otherWorkspace.mappings[type]['State'][stateName] || "";
-
-                    mappedStateName = this._getStateNameFromValue(mappedStateName, otherWorkspace, type, stateName);
 
                     data.push({
                         type: type,
@@ -3170,9 +2750,9 @@ Ext.define('CArABU.technicalservices.WorkspaceConfigurationDialog', {
     _getPortfolioStateOptions: function(otherWorkspace){
         var data = [];
         Ext.Object.each(otherWorkspace.portfolioItemStates, function(type, states){
-            Ext.Array.each(states, function(state){
-                if (state && state.get('StringValue') && !Ext.Array.contains(data, state.get('StringValue'))){
-                    data.push(state.get('StringValue'));
+            Ext.Object.each(states, function(stateName, stateRef){
+                if (stateName  && !Ext.Array.contains(data, stateName)){
+                    data.push(stateName);
                 }
             });
         });
@@ -3186,7 +2766,8 @@ Ext.define('CArABU.technicalservices.WorkspaceConfigurationDialog', {
             dataIndex: 'type',
             text: 'type',
             renderer: function(v){
-                return v.replace('PortfolioItem/','');
+                var string = v.replace('portfolioitem/','');
+                return string.charAt(0).toUpperCase() + string.slice(1);
             }
         },{
             dataIndex: 'mapFrom',
@@ -3287,6 +2868,7 @@ Ext.define('CA.technicalservices.xWorkspaceCopyDialog',{
             });
         }
 
+        //TODO only show workspaces that can copy all the record types selected.
         var workspaces = CArABU.technicalservices.WorkspaceSettingsUtility.getDestinationWorkspaceConfigurations();
 
         var filters = _.map(workspaces, function(w){ return { property: "ObjectID", value: w.ObjectID}; });
@@ -3350,8 +2932,8 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsUtility',{
         task: ['Name','Description','State'],
         portfolioitem: ['Name','State','Description','PlannedStartDate','PlannedEndDate']
     },
-    syncFetchFields: ['LastUpdateDate','Workspace','ObjectID'],
-    copyFields: ['Name','ScheduleState','Description','PlanEstimate','State','PlannedStartDate','PlannedEndDate'],
+    syncFetchFields: ['LastUpdateDate','Workspace','ObjectID','FormattedID'],
+    copyFields: ['ObjectID','Name','ScheduleState','Description','PlanEstimate','State','PlannedStartDate','PlannedEndDate'],
 
     context: null,
     workspaceSettingsHash: null,
@@ -3421,7 +3003,10 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsUtility',{
         Deft.Promise.all(promises).then({
             success: function(results){
                 for (var i=0; i<workspaceConfiguration.portfolioItemTypes.length; i++){
-                    workspaceConfiguration.portfolioItemStates[workspaceConfiguration.portfolioItemTypes[i]] = results[i];
+                    workspaceConfiguration.portfolioItemStates[workspaceConfiguration.portfolioItemTypes[i].toLowerCase()] = {};
+                    Ext.Array.each(results[i], function(r){
+                        workspaceConfiguration.portfolioItemStates[workspaceConfiguration.portfolioItemTypes[i].toLowerCase()][r.get('StringValue')] = r.get('_ref');
+                    });
                 }
                 deferred.resolve(workspaceConfiguration);
             },
@@ -3452,7 +3037,6 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsUtility',{
             promises = [],
             deferred = Ext.create('Deft.Deferred');
 
-        console.log('-- initializeWorkspaceSettingsHash workspace settings', encodedWorkspaceSettings)
         if (encodedWorkspaceSettings && !_.isEmpty(encodedWorkspaceSettings)){
             if (Ext.isString(encodedWorkspaceSettings)){
                 workspaceSettingsHash = Ext.JSON.decode(encodedWorkspaceSettings);
@@ -3488,12 +3072,20 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsUtility',{
     getCopyableTypes: function(type){
         var piTypes = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspacePortfolioItemTypes(),
             types = [];
-        for (var i=0; i<piTypes.length; i++){
+
+        var maxPILevels = 0;
+        Ext.Array.each(CArABU.technicalservices.WorkspaceSettingsUtility.getDestinationWorkspaceConfigurations(), function(w){
+            maxPILevels = Math.max(w.portfolioItemTypes.length, maxPILevels);
+        });
+        maxPILevels = Math.min(maxPILevels, piTypes.length);
+
+        for (var i=0; i<maxPILevels; i++){
             types.push(piTypes[i]);
             if (piTypes[i].toLowerCase === type.toLowerCase()){
                 i = piTypes.length;
             }
         }
+
         types = types.concat(['hierarchicalrequirement','task']);
         return types;
     },
@@ -3525,9 +3117,8 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsUtility',{
         if (!record.linkField){
             errors.push("Please select a link field.");
         }
-
         for (var i=0; i<maxPortfolioLevels; i++){
-            var mappings = record.mappings && record.mappings[record.portfolioItemTypes[i]];
+            var mappings = record.mappings && record.mappings[record.portfolioItemTypes[i].toLowerCase()];
             if (!mappings){
                 errors.push("Please provide mappings for " + record.portfolioItemTypes[i]);
             } else {
@@ -3567,10 +3158,11 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsUtility',{
 
         return validFieldObjects
     },
+
     getValueMap: function(workspaceRef, type, field){
+
         var workspaceID = Rally.util.Ref.getOidFromRef(workspaceRef),
             wksp = CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash[workspaceID];
-
         return wksp.mappings && wksp.mappings[type.toLowerCase()] && wksp.mappings[type.toLowerCase()][field] || null;
     },
     getCurrentProjectName: function(){
@@ -3578,8 +3170,143 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsUtility',{
     },
     getCurrentWorkspaceName: function(){
         return CArABU.technicalservices.WorkspaceSettingsUtility.context.getWorkspace().Name;
-    }
+    },
+    getWorkspaceForProject: function(projectID){
+        var workspaceID = null;
+        Ext.Object.each(this.workspaceStores, function(wOid, w){
+            if (w.projectIDs && Ext.Array.contains(w.projectIDs, Number(projectID))){
+                workspaceID = w.ObjectID;
+                return false;
+            }
+        });
+        return workspaceID;
+    },
+    getRefMap: function(workspaceRef, type, fieldName){
+        var oid = Rally.util.Ref.getOidFromRef(workspaceRef),
+            workspace = CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash[oid];
 
+        //TODO: make this smarter and more generic if we add other mapping fields
+        if (/portfolioitem/.test(type.toLowerCase()) && fieldName === "State"){
+            return workspace.portfolioItemStates;
+        }
+        return null;
+    },
+    getMappedValue: function(sourceRecord, fieldName, destWorkspaceRef){
+        var sourceType = sourceRecord.get('_type').toLowerCase(),
+            sourceValue = sourceRecord.get(fieldName),
+            sourceWorkspaceRef = sourceRecord.get('Workspace')._ref;
+
+        if (Ext.isObject(sourceValue)){
+            sourceValue = sourceValue._refObjectName;
+        }
+
+        if (!sourceValue){
+            return null;
+        }
+
+            var valueMap = null,
+                fromCurrent = true;
+            if (CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspace().ObjectID === Rally.util.Ref.getOidFromRef(destWorkspaceRef)){
+                fromCurrent = false;
+                valueMap = CArABU.technicalservices.WorkspaceSettingsUtility.getValueMap(sourceWorkspaceRef, sourceType, fieldName);
+            } else {
+                valueMap = CArABU.technicalservices.WorkspaceSettingsUtility.getValueMap(destWorkspaceRef, sourceType, fieldName);
+            }
+
+        if (!valueMap){
+            return sourceValue;
+        }
+
+        //valueMap is currentWorkspaceValue => otherWorkspaceValue
+        var newVal = null;
+
+        if (fromCurrent){
+            newVal = valueMap[sourceValue] || null;
+        } else {
+            Ext.Object.each(valueMap, function(currentVal, otherVal){
+                if (otherVal === sourceValue){
+                    newVal = currentVal;
+                }
+            });
+        }
+
+        var refMap = CArABU.technicalservices.WorkspaceSettingsUtility.getRefMap(destWorkspaceRef, sourceType, fieldName);
+        if (refMap){
+            return refMap[sourceType] && refMap[sourceType][newVal] || null;
+        }
+
+        return newVal;
+
+    },
+    getSyncFields: function(type){
+        type = type.toLowerCase();
+        if (/^portfolioitem/.test(type.toLowerCase())){
+            type = "portfolioitem";
+        }
+        return CArABU.technicalservices.WorkspaceSettingsUtility.syncFields[type] || [];
+    },
+    getLinkValue: function(artifact, workspaceName, projectName){
+        var link_text = Ext.String.format('[{0}][{1}] {2}',workspaceName, projectName, artifact.get('FormattedID'));
+
+        return Rally.nav.DetailLink.getLink({
+            record: artifact,
+            text: link_text
+        });
+    },
+    parseLinkValue: function(linkValue){
+       var matches = /<a.*href=".*\/#\/(\d+).*\/detail\/.*\/(\d+)">(.*)<\/a>/.exec(linkValue),
+           obj = {};
+
+        if (matches){
+            obj.objectID = matches[2] || null;
+            obj.projectOid =matches[1] || null;
+            obj.linkText = matches[3];
+
+        }
+        return obj;
+    },
+    getObjectIDFromLinkValue: function(linkValue){
+        var obj = CArABU.technicalservices.WorkspaceSettingsUtility.parseLinkValue(linkValue);
+        return obj.objectID || null;
+    },
+    getContextFromLinkValue: function(linkValue){
+        var obj = CArABU.technicalservices.WorkspaceSettingsUtility.parseLinkValue(linkValue);
+
+        if (obj.projectOid && obj.linkText){
+            var linkTextMatches = /\[(.*)\]\[(.*)\].*/.exec(obj.linkText),
+                workspaceOid = null;
+
+            if (linkTextMatches && linkTextMatches[1]){
+                var workspaceName = linkTextMatches[1];
+                Ext.Object.each(CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash, function(oid, obj){
+                    if (obj.Name === workspaceName){
+                        workspaceOid = obj._ref;
+                        return false;
+                    }
+                });
+            }
+            return {workspace: workspaceOid, project: "/project/" + obj.projectOid};
+        }
+        return null;
+    },
+    getDestinationModelType: function(sourceType, destinationContext){
+
+        if (/portfolioitem/.test(sourceType.toLowerCase())){
+            //This is a portfolio item
+            var ordinal = -1;
+            for (var i=0; i < CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspace().portfolioItemTypes.length; i++){
+                if (sourceType.toLowerCase() === CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspace().portfolioItemTypes[i].toLowerCase()){
+                    ordinal = i;
+                }
+            }
+
+            var workspaceOid = Rally.util.Ref.getOidFromRef(destinationContext.workspace);
+            var destType= CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash[workspaceOid].portfolioItemTypes[ordinal] || sourceType;
+            return destType;
+        }
+        return sourceType;
+
+    }
 });
 
 Ext.define('CArABU.technicalservices.WorkspaceSettingsForm',{
@@ -3716,9 +3443,6 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsForm',{
         //TODO add error text
     },
 
-    _removeWorkspace: function(){
-        this.grid.getStore().remove(this.record);
-    },
     _getColumnCfgs: function() {
         var me = this;
 
@@ -3740,10 +3464,8 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsForm',{
                         record: record,
                         text: 'Delete',
                         handler: function(){
-                            var objId = record.get('ObjectID');
-                            console.log('delete', objId);
+                            this._grid.getStore().remove(record);
                             record.destroy();
-                          //  me.workspaceSettings.removeWorkspace(objId);
                         },
                         scope: me
                     }
@@ -3764,18 +3486,19 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsForm',{
         var data = {};
         //todo build from store
         Ext.Array.each(this._grid.getStore().getRange(), function(r){
+
             data[r.get('ObjectID')] = {
                 _ref: r.get('_ref'),
                 Name: r.get('Name'),
                 ObjectID: r.get('ObjectID'),
+                linkField: r.get('linkField'),
                 portfolioItemTypes: r.get('portfolioItemTypes'),
-                mappings: r.get('mappings')
-              //  portfolioItemStates: r.get('portfolioItemStates')
+                mappings: r.get('mappings'),
+                portfolioItemStates: r.get('portfolioItemStates')
             };
 
         });
         return data;
-
     },
     /**
      * When a form asks for the data this field represents,
@@ -3796,482 +3519,6 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsForm',{
     setValue: function(value) {
         this.callParent(arguments);
         this._value = value;
-    }
-});
-
-Ext.define('CArABU.technicalservices.WorkspaceSettings',{
-    context: null,
-    syncFields: {
-        hierarchicalrequirement: ['Name','Description','ScheduleState'],
-        task: ['Name','Description','State'],
-        portfolioitem: ['Name','State','Description','PlannedStartDate','PlannedEndDate']
-    },
-    //workspaces: [{
-    //    ObjectID: 42919581370,
-    //    _ref: '/workspace/42919581370',
-    //    linkField: "c_ExternalID",
-    //    projectIDs: [],
-    //    portfolioItemTypes: null
-    //},{
-    //    ObjectID: 34702617071,
-    //    _ref: '/workspace/34702617071',
-    //    projectIDs: [34702617160],
-    //    linkField: "c_ExternalID",
-    //    portfolioItemTypes: ['portfolioitem/feature','portfolioitem/initiative'],
-    //    mappings: {
-    //        "portfolioitem/feature": {
-    //            "State": {
-    //                "Discovering":"/state/34702617464",
-    //                "Developing":"/state/34702617466",
-    //                "Measuring":"/state/34702617468",
-    //                "Done":"/state/34702617470"
-    //            }
-    //        },
-    //        "portfolioitem/initiative": {
-    //            "State": {
-    //                "Discovering":"/state/34702617478",
-    //                "Developing":"/state/34702617480",
-    //                "Measuring":"/state/34702617482",
-    //                "Done":"/state/34702617484"
-    //            }
-    //        }
-    //    }
-    //}],
-    mixins: {
-        observable: 'Ext.util.Observable'
-    },
-    constructor: function(config){
-        this.context = config.context;
-
-        this.mixins.observable.constructor.call(this, config);
-
-        this.addEvents(
-            'ready',
-            'onerror'
-        );
-    },
-    getEncodedValue: function(){
-        var encodedValue = {};
-        Ext.Object.each(this.workspaceStores, function(objectID, wksp){
-            encodedValue[objectID] = Ext.clone(wksp.getData());
-        });
-        return Ext.JSON.encode(encodedValue)
-    },
-    initialize: function(settings, currentWorkspaceLinkField){
-        if (!settings){
-            settings = {};
-        }
-
-        this._initializeWorkspaces(settings, currentWorkspaceLinkField).then({
-            success: function(){
-                this.fireEvent('ready');
-            },
-            failure: function(msg){
-                this.fireEvent('onerror', msg);
-            },
-            scope: this
-        });
-    },
-    getSyncFields: function(type){
-        type = type.toLowerCase();
-        if (/^portfolioitem/.test(type)){
-            type = 'portfolioitem';
-        }
-        return this.syncFields[type];
-    },
-    getMappedValue: function(field, sourceRecord, targetRecord){
-        var targetWorkspaceOid = targetRecord.get('Workspace').ObjectID,
-            sourceWorkspaceOid = sourceRecord.get('Workspace').ObjectID,
-            otherWorkspace = null,
-            fromCurrent = true;
-
-        if (sourceWorkspaceOid === this.getCurrentWorkspace().ObjectID){
-            otherWorkspace = this.getWorkspaceByID(targetWorkspaceOid);
-        } else {
-            fromCurrent = false;
-            otherWorkspace = this.getWorkspaceByID(sourceWorkspaceOid);
-        }
-
-        return otherWorkspace.getMappedValue(sourceRecord.get('type'), field, sourceRecord.get(field), fromCurrent);
-    },
-    add: function(workspaceStore){
-        if (!this.workspaceStores){
-            this.workspaceStores = {};
-        }
-        console.log('add', this.workspaceStores);
-        this.workspaceStores[workspaceStore.ObjectID] = workspaceStore;
-    },
-    _initializeWorkspaces: function(settings,currentWorkspaceLinkField){
-        console.log('_initialieWorkspaces', settings);
-        var deferred = Ext.create('Deft.Deferred'),
-            currentWkspOid = this.context.getWorkspace().ObjectID;
-
-        var promises = [this._initializeWorkspace(this.context.getWorkspace())];
-        Ext.Object.each(settings, function(wkspOid, wksp){
-            if (Number(wkspOid) !== currentWkspOid){
-                promises.push(this._initializeWorkspace(wksp))
-            }
-        }, this);
-
-        Deft.Promise.all(promises).then({
-            success: function(workspaces){
-                Ext.Array.each(workspaces, function(w){
-                    this.add(w);
-                }, this);
-                this.getCurrentWorkspace().linkField = currentWorkspaceLinkField;
-                deferred.resolve();
-            },
-            failure: function(msg){
-                deferred.reject(msg);
-            },
-            scope: this
-        });
-
-        return deferred;
-
-    },
-    _initializeWorkspace: function(workspace){
-        var deferred = Ext.create('Deft.Deferred');
-        Ext.create('CArABU.technicalservices.WorkspaceStore',{
-            workspace: workspace,
-            listeners: {
-                ready: function(workspace){
-                    deferred.resolve(workspace);
-                },
-                error: function(msg){
-                    deferred.reject(msg);
-                }
-            }
-        });
-        return deferred;
-    },
-    getCurrentContext: function(){
-        return this.context;
-    },
-    removeWorkspace: function(objectID){
-        delete this.workspaceStores[objectID];
-    },
-    getCurrentWorkspace: function(){
-        var wksp = this.getWorkspaceByID();
-        return wksp;
-    },
-    getLinkField: function(workspaceID){
-        var wksp = this.getWorkspaceByID(workspaceID);
-        return wksp && wksp.linkField;
-    },
-    getWorkspaceByID: function(workspaceID){
-        if (!workspaceID){
-            workspaceID = this.context.getWorkspace().ObjectID;
-        }
-        return this.workspaceStores && this.workspaceStores[workspaceID] || null;
-    },
-    getValueMap: function(workspaceRef, type, field){
-        var workspaceID = Rally.util.Ref.getOidFromRef(workspaceRef),
-            wksp = this.getWorkspaceByID(workspaceID);
-        console.log('--getValueMap', workspaceRef, type, field, wksp)
-        return wksp.mappings && wksp.mappings[type.toLowerCase()] && wksp.mappings[type.toLowerCase()][field] || null;
-    },
-    getDestinationWorkspaces: function(){
-        var currentWorkspaceID = this.getCurrentWorkspace().ObjectID;
-        var workspaces = [];
-        Ext.Object.each(this.workspaceStores, function(wOid, w){
-            console.log('each wk', wOid, w);
-            if (Number(wOid) !== Number(currentWorkspaceID)){
-                workspaces.push(w);
-            }
-        });
-        return workspaces;
-    },
-    getCopyableTypes: function(type){
-        var piTypes = this.getCurrentWorkspace().portfolioItemTypes,
-            types = [];
-        for (var i=0; i<piTypes.length; i++){
-            types.push(piTypes[i]);
-            if (piTypes[i].toLowerCase === type.toLowerCase()){
-                i = piTypes.length;
-            }
-        }
-        types = types.concat(['hierarchicalrequirement','task']);
-        return types;
-    },
-    getWorkspaceForProject: function(projectID){
-        var workspaceID = null;
-        Ext.Object.each(this.workspaceStores, function(wOid, w){
-            console.log('w', w, w.projectIDs, projectID);
-            if (w.projectIDs && Ext.Array.contains(w.projectIDs, Number(projectID))){
-                workspaceID = w.ObjectID;
-                return false;
-            }
-        });
-        return workspaceID;
-    }
-});
-
-Ext.define('CArABU.technicalservices.WorkspaceStore',{
-
-    mixins: {
-        observable: 'Ext.util.Observable'
-    },
-
-    /**
-     * Configurations
-     * @param config
-     *
-     * workspace
-     * ObjectID
-     * models
-     * linkField
-     * portfolioItemTypes
-     * portfolioItemStates
-     * mappings
-     */
-
-    //    ObjectID: 34702617071,
-    //    _ref: '/workspace/34702617071',
-    //    projectIDs: [34702617160],
-    //    linkField: "c_ExternalID",
-    //    portfolioItemTypes: ['portfolioitem/feature','portfolioitem/initiative'],
-    //    mappings: {
-    //        "portfolioitem/feature": {
-    //            "State": {
-    //                "Discovering":"/state/34702617464",
-    //                "Developing":"/state/34702617466",
-    //                "Measuring":"/state/34702617468",
-    //                "Done":"/state/34702617470"
-    //            }
-    //        },
-    //        "portfolioitem/initiative": {
-    //            "State": {
-    //                "Discovering":"/state/34702617478",
-    //                "Developing":"/state/34702617480",
-    //                "Measuring":"/state/34702617482",
-    //                "Done":"/state/34702617484"
-    //            }
-    //        }
-    //    }
-
-    constructor: function(config){
-        console.log('config', config);
-        this._ref = config.workspace._ref || config.workspace.get('_ref');
-        this.ObjectID = config.workspace.ObjectID || config.workspace.get('ObjectID');
-        this.Name = config.workspace.Name || config.workspace.get('Name');
-
-        this.mixins.observable.constructor.call(this, config);
-
-        Deft.Chain.sequence([
-            this._fetchModels,
-            this._fetchStateAllowedValues
-        ],this).then({
-            success: function(){
-                this.fireEvent('ready', this);
-            },
-            failure: function(msg){
-                this.fireEvent('error', msg);
-            },
-            scope: this
-        });
-    },
-    getData: function(){
-        return {
-            ObjectID:  this.ObjectID,
-            _ref: this._ref,
-            Name: this.Name,
-            linkField: this.linkField,
-            portfolioItemTypes: this.portfolioItemTypes,
-            mappings: this.mappings || {}
-        };
-    },
-    getLinkField: function(){
-        return this.linkField;
-    },
-
-    getValidLinkFields: function(){
-        //Find the custom string field on each model that can be the link field.
-        var validFields = [];
-        Ext.Object.each(this.models, function(key, m){
-            var fields = [];
-            Ext.Array.each(m.getFields(), function(f){
-                if (f.custom && f.attributeDefinition
-                    && f.attributeDefinition.AttributeType === 'STRING'
-                    && !f.readOnly){
-                    fields.push(f.name);
-                }
-            });
-            if (validFields.length === 0){
-                validFields = fields;
-            }
-            validFields = _.intersection(fields, validFields);
-        });
-
-        var validFieldObjects = [];
-        Ext.Array.each(validFields, function(f){
-            validFieldObjects.push(this.models['UserStory'].getField(f));
-        }, this);
-
-        return validFieldObjects
-    },
-    setLinkField: function(linkField){
-        this.linkField = linkField || null;
-    },
-    getMappedValue: function(type, field, sourceValue, fromCurrent){
-        Ext.Object.each(this.mappings, function(mappingType, mappingFieldObj){
-            console.log('getMappedValue', mappingType, type, field, sourceValue, fromCurrent );
-            if (mappingType.toLowerCase() === type.toLowerCase()){
-                if (mappingFieldObj[field]){
-                    var mappedValue = "";
-                    Ext.Object.each(mappingFieldObj[field], function(currentValue, otherValue){
-                        if (fromCurrent){
-                            if (currentValue === sourceValue){
-                                mappedValue = otherValue;
-                                return false;
-                            }
-                        } else {
-                            if (otherValue === sourceValue){
-                                mappedValue = currentValue;
-                                return false;
-                            }
-                        }
-                    });
-                    return mappedValue;
-                }
-            }
-        });
-        return sourceValue;
-    },
-    getPortfolioItemLevels: function(){
-        return this.portfolioItemTypes.length;
-    },
-    getPortfolioItemType: function(zeroBasedLevel){
-        if (zeroBasedLevel >= 0 && zeroBasedLevel < this.portfolioItemTypes.length) {
-            return this.portfolioItemTypes[zeroBasedLevel];
-        }
-        return null;
-    },
-    getPortfolioItemLevel: function(type){
-        for (var i=0; i<this.portfolioItemTypes.length; i++){
-            if (this.portfolioItemTypes[i] === type){
-                return i;
-            }
-        }
-        return -1;
-    },
-    getPortfolioStateOptions: function(){
-        var data = [];
-        Ext.Object.each(this.portfolioItemStates, function(type, states){
-            Ext.Array.each(states, function(state){
-                if (state && state.get('StringValue')){
-                    data.push({
-                        _ref: state.get('_ref'),
-                        state: state.get('StringValue') + "(" + type + ")"
-                    });
-                }
-            });
-        });
-        return data;
-    },
-
-    saveMapping: function(mappedType, mappedField, mapFromValue, mapToValue){
-        var mappings = this.mappings || {};
-
-        mappings[mappedType] = mappings[mappedType] || {};
-        mappings[mappedType][mappedField] = mappings[mappedType][mappedField] || {};
-        mappings[mappedType][mappedField][mapFromValue] = mapToValue;
-
-        this.mappings = mappings;
-    },
-    /**
-     * called from the configuration dialog to validate that the workspace has been fully configured.
-     */
-    validateConfiguration: function(maxPortfolioLevels){
-        var errors = [];
-
-        maxPortfolioLevels = maxPortfolioLevels || this.portfolioItemTypes.length;
-
-        if (!this.linkField){
-            errors.push("Please select a link field.");
-        }
-
-        for (var i=0; i<maxPortfolioLevels; i++){
-            var mappings = this.mappings && this.mappings[this.portfolioItemTypes[i]];
-            if (!mappings){
-                errors.push("Please provide mappings for " + this.portfolioItemTypes[i]);
-            } else {
-                Ext.Object.each(mappings, function(field, fieldMapping){
-                    Ext.Object.each(fieldMapping, function(mapFrom, mapTo){
-                        if (!mapTo || mapTo.length === 0){
-                            errors.push("Please select a mapping for " + field + " value " + mapFrom);
-                        }
-                    });
-                });
-            }
-        }
-        return errors;
-    },
-    _fetchModels: function(){
-        var deferred = Ext.create('Deft.Deferred'),
-            workspaceRef = this._ref;
-
-        console.log('context', workspaceRef);
-        var context = { workspace: workspaceRef, project: null },
-            models = ['UserStory','Task'];
-
-        CArABU.technicalservices.WsapiToolbox.fetchPortfolioItemTypes(context).then({
-            success: function(portfolioItemTypes){
-                var portfolioItemModels = _.map(portfolioItemTypes, function(p){
-                    return p.get('TypePath');
-                });
-                this.portfolioItemTypes = portfolioItemModels;
-
-                models = models.concat(portfolioItemModels);
-                Rally.data.ModelFactory.getModels({
-                    types: models,
-                    context: context,
-                    success: function(models){
-                        this.models = models;
-                        deferred.resolve();
-                    },
-                    failure: function(errorMsg){
-                        deferred.reject(errorMsg);
-                    },
-                    scope: this
-                });
-            },
-            failure: function(errorMsg){
-                deferred.reject(errorMsg);
-            },
-            scope: this
-        });
-        return deferred;
-    },
-    _fetchStateAllowedValues: function(){
-        var deferred = Ext.create('Deft.Deferred'),
-            promises = [];
-
-        console.log('_fetchStateAllowedValues', this.portfolioItemTypes);
-        Ext.Array.each(this.portfolioItemTypes, function(m){
-            promises.push(CArABU.technicalservices.WsapiToolbox.fetchAllowedValues(this.models[m],'State'));
-        }, this);
-
-        this.portfolioItemStates = {};
-        Deft.Promise.all(promises).then({
-            success: function(results){
-                for (var i=0; i<this.portfolioItemTypes.length; i++){
-                    this.portfolioItemStates[this.portfolioItemTypes[i]] = results[i];
-                }
-                console.log('this.PortoflioItemStates', this.portfolioItemStates);
-                deferred.resolve();
-            },
-            failure: function(msg){
-                deferred.reject(msg);
-            },
-            scope: this
-        });
-        return deferred;
-    },
-    statics: {
-        getSettingsDataFields: function(){
-            return ['ObjectID','Name','linkField','mappings'];
-        }
     }
 });
 
@@ -4351,7 +3598,6 @@ Ext.define('CArABU.technicalservices.WsapiToolbox',{
                 if (success){
                     deferred.resolve(records);
                 } else {
-                    console.log('error', operation, model.elementName, field);
                     deferred.reject('Error fetching AllowedValues:  ' + operation.error.errors.join(','));
                 }
             }
@@ -4672,21 +3918,27 @@ Ext.define("cross-workspace-list", {
                     items: [{
                         xtype: 'bulkmenuitemxworkspacecopy' ,
                         linkField: this.getLinkField(),
-                        typesToCopy: CArABU.technicalservices.WorkspaceSettingsUtility.getCopyableTypes(type, this.getWorkspaceSettingsHash(),this.getContext()),
+                        typesToCopy: CArABU.technicalservices.WorkspaceSettingsUtility.getCopyableTypes(type, this.getContext()),
                         copyFields: CArABU.technicalservices.WorkspaceSettingsUtility.copyFields,
                         workspaceSettings: this.getWorkspaceSettingsHash(),
                         context: this.getContext()
                     },{
                         xtype: 'bulkmenuitemxworkspacedeepcopy' ,
                         linkField: this.getLinkField(),
-                        typesToCopy: CArABU.technicalservices.WorkspaceSettingsUtility.getCopyableTypes(type, this.getWorkspaceSettingsHash(),this.getContext()),
+                        typesToCopy: CArABU.technicalservices.WorkspaceSettingsUtility.getCopyableTypes(type, this.getContext()),
                         copyFields: CArABU.technicalservices.WorkspaceSettingsUtility.copyFields,
                         workspaceSettings: this.getWorkspaceSettingsHash(),
                         context: this.getContext()
                     }]
                 }
             },
-            //plugins: this._getPlugins(),
+            plugins: [{
+                ptype: 'rallygridboardfieldpicker',
+                headerPosition: 'left',
+                modelNames: [type],
+                stateful: true,
+                stateId: this.getContext().getScopedStateId('columns')
+            }],
             height: this.getHeight()
         });
     },
@@ -4701,8 +3953,19 @@ Ext.define("cross-workspace-list", {
                     this.logger.log('syncerror',error);
                     Rally.ui.notify.Notifier.showError({message: error});
                 },
-                synccomplete: function(records){
-                    this.logger.log('synccomplete',records);
+                synccomplete: function(syncedRecords, unsyncedRecords, syncErrors){
+                    this.logger.log('synccomplete',syncedRecords, unsyncedRecords, syncErrors);
+                    var successfulRecords = syncedRecords && syncedRecords.length,
+                        totalRecords = sourceRecords.length;
+                    if (successfulRecords !== totalRecords){
+                        var msg = Ext.String.format("{0} of {1} records synced successfully.<br/><br/>Failures:<br/>",successfulRecords, totalRecords);
+                        for (var i =0; i< unsyncedRecords.length; i++){
+                            msg += Ext.String.format("[{0}] {1}<br/>", unsyncedRecords[i].get('_refObjectName'),syncErrors[i])
+                        }
+                        Rally.ui.notify.Notifier.showWarning({message: msg, allowHTML: true});
+                    } else {
+                        Rally.ui.notify.Notifier.show({message: Ext.String.format("All {0} records synced successfully.", successfulRecords)});
+                    }
                 },
                 syncstatus: function(status){
                     this.logger.log('syncstatus',status);
@@ -4750,13 +4013,11 @@ Ext.define("cross-workspace-list", {
      * @param options.scope scope to call success with
      */
     updateSettingsValues: function(options) {
-        console.log('---settings updatesettingsvalues options', options);
 
         Rally.data.PreferenceManager.update(Ext.apply(this._getAppSettingsLoadOptions(), {
             requester: this,
             settings: options.settings,
             success: function(updatedSettings) {
-                console.log('---settings updatesettingsvalues', updatedSettings, options.settings);
                 Ext.apply(this.settings, updatedSettings);
 
                 if (options.success) {
