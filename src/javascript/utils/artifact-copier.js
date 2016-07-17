@@ -206,40 +206,33 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
 
         this.logger.log('_stitchArtifacts', updateRecords);
 
-        //if (updateRecords && updateRecords.length > 0) {
-        //
-        //    var promises = [], me = this;
-        //    Ext.Array.each(updateRecords, function (rec) {
-        //        promises.push(function() { return me._saveRecord(rec);});
+        if (updateRecords && updateRecords.length > 0) {
+
+            var promises = [], me = this;
+            Ext.Array.each(updateRecords, function (rec) {
+                promises.push(function() {var r = rec; return me._saveRecord(r);});
+            });
+            return Deft.Chain.sequence(promises);
+
+        } else {
+            deferred.resolve();
+        }
+        //if (updateRecords && updateRecords.length > 0){
+        //    var bulkUpdateStore = Ext.create('Rally.data.wsapi.batch.Store', {
+        //        data: updateRecords
         //    });
-        //    Deft.Chain.sequence(promises).then({
-        //        success: function () {
+        //
+        //    bulkUpdateStore.sync({
+        //        success: function(batch) {
         //            deferred.resolve();
         //        },
-        //        failure: function (msg) {
-        //            deferred.reject(msg);
-        //        },
-        //        scope: this
+        //        failure: function(batch){
+        //            deferred.reject();
+        //        }
         //    });
         //} else {
         //    deferred.resolve();
         //}
-        if (updateRecords && updateRecords.length > 0){
-            var bulkUpdateStore = Ext.create('Rally.data.wsapi.batch.Store', {
-                data: updateRecords
-            });
-
-            bulkUpdateStore.sync({
-                success: function(batch) {
-                    deferred.resolve();
-                },
-                failure: function(batch){
-                    deferred.reject();
-                }
-            });
-        } else {
-            deferred.resolve();
-        }
 
         return deferred;
     },
