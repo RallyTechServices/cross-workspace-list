@@ -23,11 +23,11 @@ Ext.define('CArABU.technicalservices.ArtifactSyncer',{
         this.unsyncedRecords = [];
         this.syncErrors = [];
 
-        var promises = [];
+        var promises = [], me=this;
         Ext.Array.each(sourceRecords, function(r){
-            promises.push(this.syncLinkedArtifact(r, linkField));
+            promises.push(function(){ var rec = r; return me.syncLinkedArtifact(rec, linkField);});
         }, this);
-        Deft.Promise.all(promises).then({
+        Deft.Chain.sequence(promises).then({
             success: function(){
                 this.fireEvent('synccomplete', this.syncedRecords, this.unsyncedRecords, this.syncErrors);
             },
@@ -108,25 +108,31 @@ Ext.define('CArABU.technicalservices.ArtifactSyncer',{
             if (Ext.isObject(val)){
                 val = val._ref;
             }
+
             syncTarget.set(f,val);
         }, this);
 
-        syncTarget.save({
-            callback: function(record, operation){
-                if (operation.wasSuccessful()){
-                    this.logger.log('syncTarget saved', record);
-                    this.syncedRecords.push(sourceRecord);
-                    deferred.resolve();
-                } else {
-                    var msg = Ext.String.format("Failed to sync record {0}: {1}",sourceRecord.get('FormattedID'), operation.error.errors.join(','));
-                    this.logger.log('syncTarget failed', msg);
-                    this.unsyncedRecords.push(sourceRecord);
-                    this.syncErrors.push(msg);
-                    deferred.resolve();
-                }
-            },
-            scope:this
-        });
+        if (syncTarget.dirty){
+            syncTarget.save({
+                callback: function(record, operation){
+                    if (operation.wasSuccessful()){
+                        this.logger.log('syncTarget saved', record);
+                        this.syncedRecords.push(sourceRecord);
+                        deferred.resolve();
+                    } else {
+                        var msg = Ext.String.format("Failed to sync record {0}: {1}",sourceRecord.get('FormattedID'), operation.error.errors.join(','));
+                        this.logger.log('syncTarget failed', msg);
+                        this.unsyncedRecords.push(sourceRecord);
+                        this.syncErrors.push(msg);
+                        deferred.resolve();
+                    }
+                },
+                scope:this
+            });
+        } else {
+            this.logger.log('syncTarget up to date', syncTarget);
+            deferred.resolve();
+        }
 
         return deferred;
     }

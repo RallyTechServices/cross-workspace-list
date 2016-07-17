@@ -343,16 +343,19 @@ Ext.define('CArABU.technicalservices.WorkspaceConfigurationDialog', {
                     mapToName = r.get('mapTo'),
                     mapToValue = null;
 
-                if (_.has(otherWorkspace.portfolioItemStates[mappedType], mapToName)){
+                var otherMappedType = CArABU.technicalservices.WorkspaceSettingsUtility.getDestinationModelType(mappedType, {workspace: otherWorkspace._ref}).toLowerCase();
+
+                if (_.has(otherWorkspace.portfolioItemStates[otherMappedType], mapToName)){
                     mapToValue = mapToName;
                 }
-
+                //We are saving items with the current workspace type for mapping.
                 mappedType = mappedType.toLowerCase();
                 mappings[mappedType] = mappings[mappedType] || {};
                 mappings[mappedType][mappedField] = mappings[mappedType][mappedField] || {};
                 mappings[mappedType][mappedField][mapFromValue] = mapToValue;
 
             }, this);
+         //   console.log('otherWorkspacemappings', mappings);
             otherWorkspace.mappings = mappings;
         }
     },
@@ -364,18 +367,20 @@ Ext.define('CArABU.technicalservices.WorkspaceConfigurationDialog', {
 
         var data = [];
         for (var i=0; i < totalPortfolioLevels; i++){
-            var type = currentWorkspace.portfolioItemTypes[i].toLowerCase();
+            var currentType = currentWorkspace.portfolioItemTypes[i].toLowerCase(),
+                otherType = otherWorkspace.portfolioItemTypes[i];
 
-            Ext.Object.each(currentWorkspace.portfolioItemStates[type], function(stateName, ref){
+            Ext.Object.each(currentWorkspace.portfolioItemStates[currentType], function(stateName, ref){
 
                 if (stateName) {
                     var mappedStateName = otherWorkspace.mappings &&
-                        otherWorkspace.mappings[type] &&
-                        otherWorkspace.mappings[type]['State'] &&
-                        otherWorkspace.mappings[type]['State'][stateName] || "";
+                        otherWorkspace.mappings[currentType] &&
+                        otherWorkspace.mappings[currentType]['State'] &&
+                        otherWorkspace.mappings[currentType]['State'][stateName] || "";
 
                     data.push({
-                        type: type,
+                        type: currentType,
+                        otherType: otherType,
                         mapFrom: stateName,
                         mapTo: mappedStateName
                     });
@@ -411,9 +416,10 @@ Ext.define('CArABU.technicalservices.WorkspaceConfigurationDialog', {
         return [{
             dataIndex: 'type',
             text: 'type',
-            renderer: function(v){
-                var string = v.replace('portfolioitem/','');
-                return string.charAt(0).toUpperCase() + string.slice(1);
+            renderer: function(v,m,r){
+                return r.get('otherType').replace('PortfolioItem/','');
+                //var string = v.replace('portfolioitem/','');
+                //return string.charAt(0).toUpperCase() + string.slice(1);
             }
         },{
             dataIndex: 'mapFrom',

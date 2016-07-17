@@ -7,7 +7,7 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsUtility',{
         portfolioitem: ['Name','State','Description','PlannedStartDate','PlannedEndDate']
     },
     syncFetchFields: ['LastUpdateDate','Workspace','ObjectID','FormattedID'],
-    copyFields: ['ObjectID','Name','ScheduleState','Description','PlanEstimate','State','PlannedStartDate','PlannedEndDate'],
+    copyFields: ['ObjectID','FormattedID','Name','ScheduleState','Description','PlanEstimate','State','PlannedStartDate','PlannedEndDate'],
 
     context: null,
     workspaceSettingsHash: null,
@@ -184,17 +184,21 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsUtility',{
         return ['ObjectID','Name','linkField','mappings','portfolioItemTypes','portfolioItemStates','models','_ref'];
     },
     validateSetting: function(record, maxPortfolioLevels){
-        var errors = [];
+        var errors = [],
+            currentPITypes = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspacePortfolioItemTypes();
 
-        maxPortfolioLevels = maxPortfolioLevels || CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspacePortfolioItemTypes().length;
+        maxPortfolioLevels = maxPortfolioLevels || currentPITypes.length;
 
         if (!record.linkField){
             errors.push("Please select a link field.");
         }
         for (var i=0; i<maxPortfolioLevels; i++){
-            var mappings = record.mappings && record.mappings[record.portfolioItemTypes[i].toLowerCase()];
+            //This is confusing becuase the mappings are using the current workspace pi types for reference.
+            //We should probably use indexes instead of types...
+            var mappings = record.mappings && record.mappings[currentPITypes[i].toLowerCase()];
             if (!mappings){
-                errors.push("Please provide mappings for " + record.portfolioItemTypes[i]);
+                //Even though we are using the current, we want to show the
+                errors.push("Please provide valid mappings for " + record.portfolioItemTypes[i]);
             } else {
                 Ext.Object.each(mappings, function(field, fieldMapping){
                     Ext.Object.each(fieldMapping, function(mapFrom, mapTo){
@@ -233,11 +237,30 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsUtility',{
         return validFieldObjects
     },
 
+    getSourceType: function(destinationType, destinationWorkspaceID){
+
+        if (/portfolioitem/.test(destinationType.toLowerCase())) {
+
+            var destWksp = CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash[destinationWorkspaceID],
+                ordinal = -1;
+
+            for (var i = 0; i < destWksp.portfolioItemTypes.length; i++) {
+                if (destWksp.portfolioItemTypes[i].toLowerCase() === destinationType.toLowerCase()) {
+                    ordinal = i;
+                }
+            }
+            if (ordinal > -1){
+                return CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspacePortfolioItemTypes()[ordinal];
+            }
+        }
+        return destinationType;
+    },
     getValueMap: function(workspaceRef, type, field){
 
         var workspaceID = Rally.util.Ref.getOidFromRef(workspaceRef),
             wksp = CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash[workspaceID];
-        return wksp.mappings && wksp.mappings[type.toLowerCase()] && wksp.mappings[type.toLowerCase()][field] || null;
+        var sourceType = CArABU.technicalservices.WorkspaceSettingsUtility.getSourceType(type, workspaceID).toLowerCase();
+        return wksp.mappings && wksp.mappings[sourceType] && wksp.mappings[sourceType][field] || null;
     },
     getCurrentProjectName: function(){
         return CArABU.technicalservices.WorkspaceSettingsUtility.context.getProject().Name;
@@ -268,7 +291,8 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsUtility',{
     getMappedValue: function(sourceRecord, fieldName, destWorkspaceRef){
         var sourceType = sourceRecord.get('_type').toLowerCase(),
             sourceValue = sourceRecord.get(fieldName),
-            sourceWorkspaceRef = sourceRecord.get('Workspace')._ref;
+            sourceWorkspaceRef = sourceRecord.get('Workspace')._ref,
+            context = {workspace: destWorkspaceRef};
 
         if (Ext.isObject(sourceValue)){
             sourceValue = sourceValue._refObjectName;
@@ -278,14 +302,15 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsUtility',{
             return null;
         }
 
-            var valueMap = null,
-                fromCurrent = true;
-            if (CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspace().ObjectID === Rally.util.Ref.getOidFromRef(destWorkspaceRef)){
-                fromCurrent = false;
-                valueMap = CArABU.technicalservices.WorkspaceSettingsUtility.getValueMap(sourceWorkspaceRef, sourceType, fieldName);
-            } else {
-                valueMap = CArABU.technicalservices.WorkspaceSettingsUtility.getValueMap(destWorkspaceRef, sourceType, fieldName);
-            }
+        var valueMap = null,
+            fromCurrent = true;
+        if (CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspace().ObjectID === Rally.util.Ref.getOidFromRef(destWorkspaceRef)){
+            fromCurrent = false;
+            context = {workspace: sourceWorkspaceRef};
+            valueMap = CArABU.technicalservices.WorkspaceSettingsUtility.getValueMap(sourceWorkspaceRef, sourceType, fieldName);
+        } else {
+            valueMap = CArABU.technicalservices.WorkspaceSettingsUtility.getValueMap(destWorkspaceRef, sourceType, fieldName);
+        }
 
         if (!valueMap){
             return sourceValue;
@@ -306,7 +331,8 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsUtility',{
 
         var refMap = CArABU.technicalservices.WorkspaceSettingsUtility.getRefMap(destWorkspaceRef, sourceType, fieldName);
         if (refMap){
-            return refMap[sourceType] && refMap[sourceType][newVal] || null;
+            var destType = CArABU.technicalservices.WorkspaceSettingsUtility.getDestinationModelType(sourceType,context).toLowerCase();
+            return refMap[destType] && refMap[destType][newVal] || null;
         }
 
         return newVal;
@@ -319,9 +345,9 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsUtility',{
         }
         return CArABU.technicalservices.WorkspaceSettingsUtility.syncFields[type] || [];
     },
-    getLinkValue: function(artifact, workspaceName, projectName){
-        var link_text = Ext.String.format('[{0}][{1}] {2}',workspaceName, projectName, artifact.get('FormattedID'));
+    getLinkValue: function(artifact, workspaceName, projectName, formattedID){
 
+        var link_text = Ext.String.format('[{0}][{1}] {2}',workspaceName, projectName, artifact.get('FormattedID') || formattedID);
         return Rally.nav.DetailLink.getLink({
             record: artifact,
             text: link_text

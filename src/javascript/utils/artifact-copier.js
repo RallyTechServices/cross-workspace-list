@@ -56,35 +56,36 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
      * @private
      */
     _fetchDestinationModels: function(){
-        var models = {},
+        var modelNames = {},
+            models = {},
             deferred = Ext.create('Deft.Deferred'),
             records = this.sourceRecords,
-            destinationProject = this.destinationProject;
+            destinationProject = this.destinationProject,
+            context = {
+                workspace: destinationProject.get('Workspace')._ref,
+                project: destinationProject.get('_ref')
+            };
 
         Ext.Array.each(records, function(r){
             var type = r.get('_type').toLowerCase();
-            if (!models[type]){
-                models[type] = this._getDestinationModelType(type);
+            if (!modelNames[type]){
+                modelNames[type] = CArABU.technicalservices.WorkspaceSettingsUtility.getDestinationModelType(type, context);
             }
         }, this);
 
         this.logger.log('_fetchDestinationModels',models, records);
-        var context = {
-                workspace: destinationProject.get('Workspace')._ref,
-                project: destinationProject.get('_ref')
-            },
-            promises = _.map(models, function(val, key){
+        var promises = _.map(modelNames, function(val, key){
                 return this._fetchModel(val, context);
             }, this);
 
         Deft.Promise.all(promises).then({
             success: function(results){
-                console.log('success', results);
+
                 var idx = 0;
                 //This assumes that the results are returned in the order they are passed, which should
                 //be a correct assumption
-                Ext.Object.each(models, function(typeName, key){
-                    models[key] = results[idx++];
+                Ext.Object.each(modelNames, function(currentType, otherType){
+                    models[currentType] = results[idx++];
                 });
                 this.modelHash = models;
                 deferred.resolve();
@@ -113,7 +114,7 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
         return deferred;
     },
     _copyStandaloneArtifacts: function(){
-        this.logger.log('_copyStandaloneArtifacts', this.records);
+        this.logger.log('_copyStandaloneArtifacts', this.sourceRecords);
 
         this.recordHash = {};
         var destProjectRef = this.destinationProject.get('_ref'),
@@ -128,8 +129,10 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
 
         Ext.Array.each(records, function(r){
             if (r.get('_type').toLowerCase() !== 'task'){
-                var overrides = {Project: destProjectRef};
-                overrides[linkField] = CArABU.technicalservices.WorkspaceSettingsUtility.getLinkValue(r, sourceWorkspaceName,sourceProjectName);
+                var overrides = {Project: destProjectRef},
+                    formattedID = r.get('FormattedID');
+
+                overrides[linkField] = CArABU.technicalservices.WorkspaceSettingsUtility.getLinkValue(r, sourceWorkspaceName,sourceProjectName, formattedID);
                 promises.push(this.copyArtifact(r, overrides));
             }
         }, this);
@@ -158,7 +161,6 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
         this.logger.log('_copyTasks', linkField, destWorkspaceID);
         Ext.Array.each(this.sourceRecords, function(r){
             if (r.get('_type').toLowerCase() === 'task'){
-                //find parent
                 var parent = me._getTaskParentRef(r);
                 if (parent){
                     me.logger.log('parentRef', parent);
@@ -229,11 +231,9 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
 
             bulkUpdateStore.sync({
                 success: function(batch) {
-                    console.log('bulkUpdateStore success', batch);
                     deferred.resolve();
                 },
                 failure: function(batch){
-                    console.log('bulkUpdateStore failure', batch);
                     deferred.reject();
                 }
             });
@@ -277,11 +277,9 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
 
         bulkUpdateStore.sync({
             success: function(batch) {
-                console.log('bulkUpdateStore success', batch);
                 deferred.resolve();
             },
             failure: function(batch){
-                console.log('bulkUpdateStore failure', batch);
                 deferred.reject();
             }
         });
@@ -333,19 +331,10 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
     _getModel: function(type){
         return this.modelHash[type.toLowerCase()] || null;
     },
-    _getDestinationModelType: function(sourceType){
-
-        if (this._isPortfolioItem(sourceType)) {
-            //TODO get the mapped portfolio itme type
-            return sourceType;
-        }
-        return sourceType;
-
-    },
     copyArtifact: function(record, overrides){
         var deferred = Ext.create('Deft.Deferred'),
             sourceOid = record.get('ObjectID');
-        this.logger.log('copyArtifact', record.get('FormattedID'));
+        this.logger.log('copyArtifact', record.get('FormattedID'), record.get('_type'), this.modelHash);
 
         this.recordHash[sourceOid] = {
             sourceRecord: record,
@@ -364,14 +353,32 @@ Ext.define('CArABU.technicalservices.ArtifactCopier',{
         this.fireEvent('copystatus', Ext.String.format("Copying {0} of {1} artifacts.", this.copiedCount, this.totalCount));
 
         var fields = this._getFieldsToCopy(record, overrides);
-        console.log('fieldstocopy', fields);
+        this.logger.log('fieldstocopy', fields);
 
         Ext.create(model, fields).save({
             callback: function(result, operation){
                 this.logger.log('copyArtifact callback',record.get('FormattedID'), operation.wasSuccessful(), result, operation);
                 if (operation.wasSuccessful()){
-                    this.recordHash[sourceOid].destinationRecord = result;
-                    deferred.resolve();
+                    if (!result.get('FormattedID')){
+                        //We need to reload to get the formatted id for some weird reason
+                        model.load(result.get('ObjectID'),{
+                            callback: function(loadedResult, operation){
+                                if (operation.wasSuccessful()){
+                                    this.recordHash[sourceOid].destinationRecord = loadedResult;
+
+                                } else {
+                                    this.recordHash[sourceOid].destinationRecord = result;
+                                    this.recordHash[sourceOid].error = operation.error.errors.join(',');
+                                }
+                                deferred.resolve();
+                            },
+                            scope: this
+                        });
+                    } else {
+                        this.recordHash[sourceOid].destinationRecord = result;
+                        deferred.resolve();
+                    }
+
                 } else {
                     this.recordHash[sourceOid].destinationRecord = result;
                     this.recordHash[sourceOid].error = operation.error.errors.join(',');

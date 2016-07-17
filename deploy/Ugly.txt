@@ -3,10 +3,10 @@
 <head>
     <title>Cross Workspace List</title>
     <!--  (c) 2016 CA Technologies.  All Rights Reserved. -->
-    <!--  Build Date: Sat Jul 16 2016 17:45:56 GMT-0600 (MDT) -->
+    <!--  Build Date: Sun Jul 17 2016 09:58:24 GMT-0600 (MDT) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Sat Jul 16 2016 17:45:56 GMT-0600 (MDT)";
+        var APP_BUILD_DATE = "Sun Jul 17 2016 09:58:24 GMT-0600 (MDT)";
         var CHECKSUM = [%= checksum %];
     </script>
     

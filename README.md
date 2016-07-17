@@ -23,6 +23,14 @@
 * Description
 * State
 
+###Syncing Items
+Pressing the Sync button will sync any linked items currently showing in the View and their descendants (if those are also linked).  
+
+If the contents of the link field is deleted in the source (the current workspace), then the item will no longer be linked. 
+ 
+The sync goes in both directions.  Whatever item was updated last will win, regardless of the field that was updated*
+This may be an enhancement request, to find the field that was updated last and syn that individually.  
+
 ## Development Notes
 
 ### First Load
