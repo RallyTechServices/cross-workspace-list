@@ -139,6 +139,6 @@ Ext.define('CArABU.technicalservices.ArtifactLoader',{
 
 
     _getArtifactFetchList: function(){
-        return this.fetchFields.concat(['Parent','WorkProduct','PortfolioItem','ObjectID','Workspace','LastUpdateDate']);
+        return this.fetchFields.concat(['Parent','FormattedID','WorkProduct','PortfolioItem','ObjectID','Workspace','LastUpdateDate']);
     }
 });

@@ -84,6 +84,26 @@ Ext.define("cross-workspace-list", {
             return;
         }
 
+        var validLinkFields = CArABU.technicalservices.WorkspaceSettingsUtility.getValidLinkFields(),
+            validLinkFieldNames = _.map(validLinkFields, function(f){ return f.name; });
+        if (!Ext.Array.contains(validLinkFieldNames, this.getSetting('link_field'))){
+            var validLinkFieldDisplayNames = _.map(validLinkFields, function(f){ return f.displayName; });
+
+            if (validLinkFieldDisplayNames.length === 0){
+                this.down('#display_box').add({
+                    xtype: 'container',
+                    html: 'The selected link field does not exist for all required objects. <br/><br/> Ask your workspace administrator to configure a custom String field with the same name for Portfolio Item, User Story and Task objects to be used as the Link Field.  Then use the "App Settings..." menu choice to select the link field that exists for all copyable types.'
+                });
+            } else {
+                this.down('#display_box').add({
+                    xtype: 'container',
+                    html: 'The selected link field does not exist for all required objects. <br/><br/> Use the "App Settings..." menu choice to select a link field that exists for all copyable types.  Valid link fields are: <br/>' + validLinkFieldDisplayNames.join('<br/>')
+                });
+            }
+
+            return;
+        }
+
         var container = this.down('#selector_box');
         var cb = container.add({
             xtype: 'rallycombobox',
@@ -109,13 +129,13 @@ Ext.define("cross-workspace-list", {
         cb.on('select', this._updateView, this);
         // cb.on('ready', this._updateView, this);
 
-        var btn = container.add({
-            xtype: 'rallybutton',
-            enableToggle: true,
-            itemId: 'btToggleState',
-            margin: 5,
-            iconCls: 'icon-link'
-        });
+        //var btn = container.add({
+        //    xtype: 'rallybutton',
+        //    enableToggle: true,
+        //    itemId: 'btToggleState',
+        //    margin: 5,
+        //    iconCls: 'icon-link'
+        //});
 
 
         var syncBtn = container.add({
@@ -125,27 +145,27 @@ Ext.define("cross-workspace-list", {
             margin: 5
         });
 
-        btn.on('toggle', this._toggleView, this);
+//        btn.on('toggle', this._toggleView, this);
         syncBtn.on('click', this._sync, this);
 
     },
-    _toggleView: function(btn){
-        var allowSync = !btn.pressed,
-            syncBtn = this.getSyncButton();
-
-        this.logger.log('_toggleView', allowSync, syncBtn);
-
-        if (btn.pressed){
-            btn.removeCls('primary')
-            btn.addCls('secondary')
-        } else {
-            btn.removeCls('secondary')
-            btn.addCls('primary')
-        }
-        if (syncBtn) { syncBtn.setDisabled(allowSync); }
-
-        this._updateView();
-    },
+    //_toggleView: function(btn){
+    //    var allowSync = !btn.pressed,
+    //        syncBtn = this.getSyncButton();
+    //
+    //    this.logger.log('_toggleView', allowSync, syncBtn);
+    //
+    //    if (btn.pressed){
+    //        btn.removeCls('primary')
+    //        btn.addCls('secondary')
+    //    } else {
+    //        btn.removeCls('secondary')
+    //        btn.addCls('primary')
+    //    }
+    //    if (syncBtn) { syncBtn.setDisabled(allowSync); }
+    //
+    //    this._updateView();
+    //},
     _updateView: function(){
         var type = this.getArtifactType(),
             showLinkedItems = this.showLinkedItemsOnly();
@@ -293,7 +313,7 @@ Ext.define("cross-workspace-list", {
             return;
         }
         box.removeAll();
-        store.load();
+        //store.load();
         box.add({
             xtype: 'rallygridboard',
             context: this.getContext(),
@@ -331,6 +351,22 @@ Ext.define("cross-workspace-list", {
                 modelNames: [type],
                 stateful: true,
                 stateId: this.getContext().getScopedStateId('columns')
+            },{
+                ptype: 'rallygridboardinlinefiltercontrol',
+                inlineFilterButtonConfig: {
+                    stateful: true,
+                    stateId: this.getContext().getScopedStateId('filters'),
+                    modelNames: [type],
+                    inlineFilterPanelConfig: {
+                        quickFilterPanelConfig: {
+                            defaultFields: [
+                                'ArtifactSearch',
+                                'Owner',
+                                'ModelType'
+                            ]
+                        }
+                    }
+                }
             }],
             height: this.getHeight()
         });
@@ -347,17 +383,18 @@ Ext.define("cross-workspace-list", {
                     Rally.ui.notify.Notifier.showError({message: error});
                 },
                 synccomplete: function(syncedRecords, unsyncedRecords, syncErrors){
+                    syncedRecords = syncedRecords || [];
+                    unsyncedRecords = unsyncedRecords || [];
                     this.logger.log('synccomplete',syncedRecords, unsyncedRecords, syncErrors);
-                    var successfulRecords = syncedRecords && syncedRecords.length,
-                        totalRecords = sourceRecords.length;
-                    if (successfulRecords !== totalRecords){
-                        var msg = Ext.String.format("{0} of {1} records synced successfully.<br/><br/>Failures:<br/>",successfulRecords, totalRecords);
+
+                    if (unsyncedRecords && unsyncedRecords.length > 0){
+                        var msg = Ext.String.format("{0} of {1} records updated successfully.<br/><br/>Failures:<br/>",syncedRecords.length, syncedRecords.length + unsyncedRecords.length);
                         for (var i =0; i< unsyncedRecords.length; i++){
                             msg += Ext.String.format("[{0}] {1}<br/>", unsyncedRecords[i].get('_refObjectName'),syncErrors[i])
                         }
                         Rally.ui.notify.Notifier.showWarning({message: msg, allowHTML: true});
                     } else {
-                        Rally.ui.notify.Notifier.show({message: Ext.String.format("All {0} records synced successfully.", successfulRecords)});
+                        Rally.ui.notify.Notifier.show({message: Ext.String.format("{0} records updated.", syncedRecords.length)});
                     }
                 },
                 syncstatus: function(status){

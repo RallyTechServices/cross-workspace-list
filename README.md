@@ -1,8 +1,27 @@
 #Cross Workspace List
 
+![ScreenShot](/images/cross-workspace-list.png)
+
 ###Requirements for app to run:
 * Link Field needs to be the same name for all copyable types in the workspace.
 * Copyable types are:  Portfolio Item, User Story and Task
+* At least 1 destination workspace needs to be configured via the App Settings.  See the App Settings section below.  
+* A link field for the current workspace needs to be selected.  
+
+#### Copying Artifacts
+Artifacts can be copied in bulk by using the Bulk Edit Menu on the Cross Workspace List.  There are 2 options available:
+(1) Deep Copy to Workspace..
+(2) Copy to Workspace...
+
+Deep Copy to workspace will copy the entire hierarchy of copyable artifacts and link them together in the destination workspace.  
+
+Copy to Workspace will only copy the selected artifacts.  
+
+The Copy options will not be available if:
+*  The artifact isn't available in the destination workspace
+*  The artifact is already linked.  This is determined by checking the link field.  
+
+Tasks cannot be copied to the destination workspace unless their parent stories are also copied at the same time.  
 
 ### List of fields that will be synced and copied with this app: 
 
@@ -22,6 +41,30 @@
 * Name
 * Description
 * State
+
+###Syncing Items
+Pressing the Sync button will sync any linked items currently showing in the View and their descendants (if those are also linked).  
+
+If the contents of the link field is deleted in the source (the current workspace), then the item will no longer be linked. 
+ 
+The sync goes in both directions.  Whatever item was updated last will win, regardless of the field that was updated*
+This may be an enhancement request, to find the field that was updated last and sync that individually.  
+
+### Setting up the App 
+At least 1 destination workspace needs to be configured for the app to run.  You will see a message if it is not setup.  
+
+To add a workspace, go to app settings.
+![ScreenShot](/images/app-settings.png)
+
+First, select a link field for the current workspace.  This needs to be a custom string field that is setup on all copyable objects (Portfolio Item, User Story and Task).  
+If you select a field that does not exist on all copyable objects, you will get a message when you try to run the app.  
+
+To add a destination workspace, click the Add Workspace (you can also Edit and Delete workspace configurations using the gear menu).  
+
+![ScreenShot](/images/add-workspace-settings.png)
+For each destination workspace, you will need to select a Link field (that exists on all copyable types) and mappings for all of the Portfolio Item types states.  
+
+If you choose to map a State for a particular portfolio item type that does not exist on that portfolio item type, you will be prompted to select a mapping for that state.  Please select a state that exists for the portfolio item type in the destination workpsace.  
 
 ## Development Notes
 
