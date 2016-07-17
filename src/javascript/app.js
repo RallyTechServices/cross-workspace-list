@@ -84,6 +84,26 @@ Ext.define("cross-workspace-list", {
             return;
         }
 
+        var validLinkFields = CArABU.technicalservices.WorkspaceSettingsUtility.getValidLinkFields(),
+            validLinkFieldNames = _.map(validLinkFields, function(f){ return f.name; });
+        if (!Ext.Array.contains(validLinkFieldNames, this.getSetting('link_field'))){
+            var validLinkFieldDisplayNames = _.map(validLinkFields, function(f){ return f.displayName; });
+
+            if (validLinkFieldDisplayNames.length === 0){
+                this.down('#display_box').add({
+                    xtype: 'container',
+                    html: 'The selected link field does not exist for all required objects. <br/><br/> Ask your workspace administrator to configure a custom String field with the same name for Portfolio Item, User Story and Task objects to be used as the Link Field.  Then use the "App Settings..." menu choice to select the link field that exists for all copyable types.'
+                });
+            } else {
+                this.down('#display_box').add({
+                    xtype: 'container',
+                    html: 'The selected link field does not exist for all required objects. <br/><br/> Use the "App Settings..." menu choice to select a link field that exists for all copyable types.  Valid link fields are: <br/>' + validLinkFieldDisplayNames.join('<br/>')
+                });
+            }
+
+            return;
+        }
+
         var container = this.down('#selector_box');
         var cb = container.add({
             xtype: 'rallycombobox',

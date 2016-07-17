@@ -212,8 +212,11 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsUtility',{
         return errors;
     },
     getValidLinkFields: function(workspace){
-        //Find the custom string field on each model that can be the link field.
         var validFields = [];
+        if (!workspace){
+            workspace = CArABU.technicalservices.WorkspaceSettingsUtility.getCurrentWorkspace();
+        }
+
         Ext.Object.each(workspace.models, function(key, m){
             var fields = [];
             Ext.Array.each(m.getFields(), function(f){

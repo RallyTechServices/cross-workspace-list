@@ -5,6 +5,7 @@ Ext.define('CrossWorkspaceCopier.Settings',{
 
     getFields: function(workspaceSettings){
         console.log('workspaceSettings', workspaceSettings)
+
         return [{
             name: 'link_field',
             xtype: 'rallyfieldcombobox',
@@ -24,7 +25,8 @@ Ext.define('CrossWorkspaceCopier.Settings',{
                         return false;
                     }
 
-                    if ( attribute.AttributeType == "STRING" ) {
+
+                    if ( attribute.AttributeType == "STRING" && attribute.Custom == true) {
                         //console.log(field.name,attribute.AttributeType,field);
                         return true;
                     }
