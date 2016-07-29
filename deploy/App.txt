@@ -3,12 +3,12 @@
 <head>
     <title>Cross Workspace List</title>
     <!--  (c) 2016 CA Technologies.  All Rights Reserved. -->
-    <!--  Build Date: Sun Jul 17 2016 10:42:32 GMT-0600 (MDT) -->
+    <!--  Build Date: Fri Jul 29 2016 11:14:14 GMT-0600 (MDT) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Sun Jul 17 2016 10:42:32 GMT-0600 (MDT)";
+        var APP_BUILD_DATE = "Fri Jul 29 2016 11:14:14 GMT-0600 (MDT)";
         var BUILDER = "kcorkan";
-        var CHECKSUM = 449518384685;
+        var CHECKSUM = 451198059720;
     </script>
     
     <script type="text/javascript" src="/apps/2.1/sdk.js"></script>
@@ -2705,7 +2705,7 @@ Ext.define('CArABU.technicalservices.WorkspaceConfigurationDialog', {
                     mapToName = r.get('mapTo'),
                     mapToValue = null;
 
-                var otherMappedType = CArABU.technicalservices.WorkspaceSettingsUtility.getDestinationModelType(mappedType, {workspace: otherWorkspace._ref}).toLowerCase();
+                var otherMappedType = CArABU.technicalservices.WorkspaceSettingsUtility.getDestinationModelType(mappedType, {workspace: otherWorkspace._ref}, otherWorkspace).toLowerCase();
 
                 if (_.has(otherWorkspace.portfolioItemStates[otherMappedType], mapToName)){
                     mapToValue = mapToName;
@@ -3332,7 +3332,7 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsUtility',{
         }
         return null;
     },
-    getDestinationModelType: function(sourceType, destinationContext){
+    getDestinationModelType: function(sourceType, destinationContext, otherWorkspace){
 
         if (/portfolioitem/.test(sourceType.toLowerCase())){
             //This is a portfolio item
@@ -3343,8 +3343,15 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsUtility',{
                 }
             }
 
-            var workspaceOid = Rally.util.Ref.getOidFromRef(destinationContext.workspace);
-            var destType= CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash[workspaceOid].portfolioItemTypes[ordinal] || sourceType;
+            var destType = sourceType;
+            if (!otherWorkspace){
+                var workspaceOid = Rally.util.Ref.getOidFromRef(destinationContext.workspace);
+                destType= CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash[workspaceOid].portfolioItemTypes[ordinal] || sourceType;
+            } else {
+                destType = otherWorkspace.portfolioItemTypes[ordinal] || sourceType;
+                console.log('destType', destType);
+            }
+
             return destType;
         }
         return sourceType;

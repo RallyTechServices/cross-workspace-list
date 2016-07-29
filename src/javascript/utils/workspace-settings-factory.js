@@ -392,7 +392,7 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsUtility',{
         }
         return null;
     },
-    getDestinationModelType: function(sourceType, destinationContext){
+    getDestinationModelType: function(sourceType, destinationContext, otherWorkspace){
 
         if (/portfolioitem/.test(sourceType.toLowerCase())){
             //This is a portfolio item
@@ -403,8 +403,15 @@ Ext.define('CArABU.technicalservices.WorkspaceSettingsUtility',{
                 }
             }
 
-            var workspaceOid = Rally.util.Ref.getOidFromRef(destinationContext.workspace);
-            var destType= CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash[workspaceOid].portfolioItemTypes[ordinal] || sourceType;
+            var destType = sourceType;
+            if (!otherWorkspace){
+                var workspaceOid = Rally.util.Ref.getOidFromRef(destinationContext.workspace);
+                destType= CArABU.technicalservices.WorkspaceSettingsUtility.workspaceSettingsHash[workspaceOid].portfolioItemTypes[ordinal] || sourceType;
+            } else {
+                destType = otherWorkspace.portfolioItemTypes[ordinal] || sourceType;
+                console.log('destType', destType);
+            }
+
             return destType;
         }
         return sourceType;

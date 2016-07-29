@@ -23,6 +23,8 @@ The Copy options will not be available if:
 
 Tasks cannot be copied to the destination workspace unless their parent stories are also copied at the same time.  
 
+Here is a video of how to setup the cross workspace app.  http://screencast.com/t/221mgpEF
+
 ### List of fields that will be synced and copied with this app: 
 
 ####Portfolio Items
