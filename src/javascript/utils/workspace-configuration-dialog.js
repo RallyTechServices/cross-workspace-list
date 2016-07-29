@@ -343,7 +343,7 @@ Ext.define('CArABU.technicalservices.WorkspaceConfigurationDialog', {
                     mapToName = r.get('mapTo'),
                     mapToValue = null;
 
-                var otherMappedType = CArABU.technicalservices.WorkspaceSettingsUtility.getDestinationModelType(mappedType, {workspace: otherWorkspace._ref}).toLowerCase();
+                var otherMappedType = CArABU.technicalservices.WorkspaceSettingsUtility.getDestinationModelType(mappedType, {workspace: otherWorkspace._ref}, otherWorkspace).toLowerCase();
 
                 if (_.has(otherWorkspace.portfolioItemStates[otherMappedType], mapToName)){
                     mapToValue = mapToName;
